@@ -1,8 +1,6 @@
 {
   "version": 2,
-  "functions": {
-    "api/claude.js": {
-      "runtime": "node"
-    }
-  }
+  "builds": [
+    { "src": "api/claude.js", "use": "@vercel/node" }
+  ]
 }
