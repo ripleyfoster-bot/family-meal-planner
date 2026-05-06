@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<!-- FIX #18: PWA meta tags for iPhone "Add to Home Screen" -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meal Planner">
+<meta name="description" content="UK family meal planner — plan meals day by day, manage household preferences, and build your shopping list.">
+<link rel="manifest" href="manifest.json">
+<title>Family Meal Planner</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --teal-800:#085041;--teal-600:#0F6E56;--teal-100:#E1F5EE;
+  --purple-100:#EEEDFE;--purple-700:#3C3489;
+  --amber-100:#FAEEDA;--amber-700:#633806;
+  --coral-100:#FAECE7;--coral-700:#712B13;
+  --red-100:#FCEBEB;--red-700:#A32D2D;--red-900:#501313;
+  --green-100:#EAF3DE;--green-700:#3B6D11;--green-900:#173404;
+  --blue-100:#E6F1FB;--blue-900:#042C53;
+  --neutral-50:#F7F6F3;--neutral-100:#EEECE8;--neutral-200:#DDD9D2;
+  --neutral-400:#9C9890;--neutral-600:#5F5E5A;--neutral-900:#1A1917;
+  --radius-md:10px;--radius-lg:14px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;background:var(--neutral-50);color:var(--neutral-900);font-size:14px;line-height:1.5;}
+#app{max-width:390px;margin:0 auto;background:#fff;min-height:100vh;display:flex;flex-direction:column;}
+
+/* TOP BAR */
+.topbar{background:var(--teal-800);color:var(--teal-100);padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar h1{font-size:16px;font-weight:600;}
+.topbar .sub{font-size:10px;opacity:.65;margin-top:1px;}
+.wk-badge{font-size:10px;background:rgba(255,255,255,.18);color:var(--teal-100);padding:3px 9px;border-radius:20px;font-weight:500;}
+
+/* TABS */
+.tabbar{display:flex;border-bottom:1px solid var(--neutral-100);background:#fff;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.tabbar::-webkit-scrollbar{display:none;}
+.tab{flex:0 0 auto;padding:9px 10px 7px;text-align:center;font-size:9.5px;color:var(--neutral-400);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;user-select:none;}
+.tab.active{color:var(--teal-600);border-bottom-color:var(--teal-600);font-weight:600;}
+.ti{font-size:13px;display:block;margin-bottom:2px;}
+
+/* SCREENS */
+.screen{display:none;flex:1;overflow-y:auto;padding:14px;flex-direction:column;gap:12px;}
+.screen.active{display:flex;}
+
+/* CARDS */
+.card{background:#fff;border:1px solid var(--neutral-100);border-radius:var(--radius-lg);padding:12px 14px;box-shadow:var(--shadow-sm);}
+.card-title{font-size:11px;font-weight:600;color:var(--neutral-400);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;}
+
+/* INPUTS */
+input[type=text],input[type=url],textarea{width:100%;border:1px solid var(--neutral-200);border-radius:var(--radius-md);padding:8px 10px;font-size:13px;font-family:inherit;color:var(--neutral-900);background:var(--neutral-50);}
+input:focus,textarea:focus{outline:none;border-color:var(--teal-600);box-shadow:0 0 0 3px rgba(15,110,86,.1);}
+textarea{resize:none;min-height:58px;line-height:1.5;}
+
+/* CHIPS */
+.chip-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.chip{padding:5px 10px;border-radius:20px;font-size:11px;border:1px solid var(--neutral-200);cursor:pointer;color:var(--neutral-600);background:var(--neutral-50);user-select:none;}
+.chip.on{background:var(--teal-100);border-color:var(--teal-600);color:var(--teal-800);font-weight:600;}
+
+/* BUTTONS */
+.btn{width:100%;padding:11px;background:var(--teal-800);color:var(--teal-100);border:none;border-radius:var(--radius-md);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn:disabled{opacity:.4;cursor:default;}
+.btn-sm{padding:5px 10px;font-size:11px;border:1px solid var(--neutral-200);background:var(--neutral-50);color:var(--neutral-600);border-radius:var(--radius-md);cursor:pointer;font-family:inherit;white-space:nowrap;font-weight:500;}
+.btn-teal{background:var(--teal-100);border-color:var(--teal-600);color:var(--teal-800);font-weight:600;}
+.btn-danger{background:var(--red-100);border:1px solid var(--red-700);color:var(--red-900);}
+.btn-green{background:var(--green-100);border:1px solid var(--green-700);color:var(--green-900);font-weight:600;}
+.btn-amber{background:var(--amber-100);border:1px solid var(--amber-700);color:var(--amber-700);font-weight:600;}
+
+/* BADGES */
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin:1px 2px 1px 0;}
+.b-sw{background:var(--teal-100);color:var(--teal-800);}
+.b-lc{background:var(--purple-100);color:var(--purple-700);}
+.b-std{background:var(--blue-100);color:var(--blue-900);}
+.b-fast{background:var(--amber-100);color:var(--amber-700);}
+.b-own{background:var(--neutral-100);color:var(--neutral-600);}
+.b-treat{background:var(--coral-100);color:var(--coral-700);}
+.b-gen{background:var(--blue-100);color:var(--blue-900);}
+
+/* LAYOUT UTILITIES */
+.sec-hd{font-size:12px;font-weight:600;color:var(--neutral-600);display:flex;justify-content:space-between;align-items:center;}
+.sublbl{font-size:12px;color:var(--neutral-400);margin-bottom:5px;line-height:1.5;}
+.empty{text-align:center;padding:22px 12px;color:var(--neutral-400);font-size:12px;line-height:1.7;}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+.back-btn{font-size:11px;color:var(--teal-600);background:none;border:none;cursor:pointer;font-family:inherit;padding:0;display:flex;align-items:center;gap:3px;margin-bottom:4px;font-weight:500;}
+.chevron{font-size:16px;color:var(--neutral-400);margin-left:auto;}
+
+/* ONBOARDING BANNER — FIX #10 */
+.onboard-banner{background:var(--teal-800);color:var(--teal-100);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px;}
+.onboard-banner h2{font-size:14px;font-weight:700;}
+.onboard-banner p{font-size:12px;opacity:.85;line-height:1.6;}
+.onboard-steps{display:flex;flex-direction:column;gap:6px;}
+.onboard-step{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.12);border-radius:var(--radius-md);padding:8px 10px;cursor:pointer;}
+.onboard-step-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.onboard-step-txt{font-size:12px;font-weight:500;}
+
+/* SETTINGS */
+.meal-slot-toggle{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.mst{padding:5px 9px;border-radius:20px;font-size:11px;border:1px solid var(--neutral-200);cursor:pointer;color:var(--neutral-600);background:var(--neutral-50);user-select:none;font-weight:500;}
+.mst.on{background:var(--teal-100);border-color:var(--teal-600);color:var(--teal-800);font-weight:600;}
+.mst-limit-note{font-size:10px;color:var(--neutral-400);margin-top:4px;}
+
+/* DAY PLANNER */
+.day-nav{display:flex;align-items:center;justify-content:space-between;background:var(--teal-800);color:var(--teal-100);padding:10px 14px;border-radius:var(--radius-lg);}
+.day-nav-name{font-size:15px;font-weight:600;}
+.day-nav-date{font-size:11px;opacity:.7;margin-top:1px;}
+.nav-arrow{background:rgba(255,255,255,.15);border:none;color:var(--teal-100);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;}
+.nav-arrow:disabled{opacity:.3;cursor:default;}
+
+/* MEAL BLOCKS */
+.meal-block{background:#fff;border:1px solid var(--neutral-100);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px;box-shadow:var(--shadow-sm);}
+.meal-block-header{padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--neutral-50);cursor:pointer;user-select:none;}
+.meal-block-name{font-size:12px;font-weight:700;color:var(--neutral-900);text-transform:uppercase;letter-spacing:.05em;}
+.meal-block-status{font-size:11px;color:var(--neutral-400);margin-top:2px;}
+.meal-block-chosen{font-size:11px;color:var(--teal-600);font-weight:600;margin-top:2px;}
+/* FIX #16: body uses class not just inline style */
+.meal-block-body{padding:11px 13px;display:none;flex-direction:column;gap:9px;}
+.meal-block-body.open{display:flex;}
+.mb-chevron{font-size:16px;color:var(--neutral-400);transition:transform .2s;flex-shrink:0;}
+.meal-block-body.open ~ * .mb-chevron, .open-chevron{transform:rotate(90deg);}
+
+/* MEMBER MEAL ROWS */
+.mem-meal-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--neutral-100);}
+.mem-meal-row:last-child{border-bottom:none;}
+.mem-av-sm{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;}
+.mem-right{flex:1;min-width:0;}
+.mem-meal-name{font-size:12px;font-weight:600;color:var(--neutral-900);}
+.mem-meal-mode{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;}
+.mem-mode-btn{font-size:10px;padding:3px 7px;border-radius:20px;border:1px solid var(--neutral-200);cursor:pointer;font-family:inherit;color:var(--neutral-600);background:var(--neutral-50);font-weight:500;}
+.mem-mode-btn.sel{font-weight:700;border-width:1.5px;}
+.mem-fasting{font-size:11px;color:var(--amber-700);font-style:italic;margin-top:2px;}
+
+/* SUGGESTION CARDS */
+.sugg-area{display:flex;flex-direction:column;gap:7px;}
+.sugg-card{background:#fff;border:1px solid var(--neutral-200);border-radius:var(--radius-md);padding:10px 12px;cursor:pointer;position:relative;}
+.sugg-card.chosen{border-color:var(--teal-600);background:var(--teal-100);}
+.sugg-card.standard-pick{border-color:var(--amber-700);background:var(--amber-100);}
+.sugg-card.dup-warn{border-color:var(--red-700);}
+.sugg-title{font-size:13px;font-weight:600;color:var(--neutral-900);padding-right:26px;}
+.sugg-card.chosen .sugg-title{color:var(--teal-800);}
+.sugg-why{font-size:11px;color:var(--neutral-600);margin-top:3px;line-height:1.5;}
+.sugg-meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;align-items:center;}
+.sugg-link{font-size:10px;color:var(--teal-600);font-weight:600;text-decoration:none;}
+.sugg-tick{position:absolute;top:9px;right:10px;background:var(--teal-600);color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;}
+.std-star{font-size:11px;color:var(--amber-700);font-weight:600;margin-bottom:2px;}
+.dup-flag{font-size:10px;color:var(--red-700);font-weight:600;margin-top:2px;}
+.sugg-actions{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;}
+/* FIX #13: remove-meal hint */
+.chosen-hint{font-size:10px;color:var(--teal-600);opacity:.75;margin-top:3px;}
+
+.load-btn{width:100%;padding:10px;background:var(--teal-800);color:var(--teal-100);border:none;border-radius:var(--radius-md);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;}
+.load-btn:disabled{opacity:.4;}
+.load-btn.refresh{background:var(--neutral-100);color:var(--neutral-600);}
+.pulse{animation:pulse 1.2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* MEMBER LIST */
+.member-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--neutral-100);cursor:pointer;}
+.member-row:last-child{border-bottom:none;}
+.member-name-txt{font-size:13px;font-weight:600;color:var(--neutral-900);}
+.member-sub{font-size:11px;color:var(--neutral-400);margin-top:1px;}
+.detail-hd{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.detail-name{font-size:15px;font-weight:700;color:var(--neutral-900);}
+.pref-section-hd{font-size:12px;font-weight:600;padding:7px 0 5px;border-bottom:1px solid var(--neutral-100);display:flex;justify-content:space-between;align-items:center;}
+
+/* PREFERENCE FORM */
+.pref-form{background:var(--neutral-50);border:1px solid var(--neutral-100);border-radius:var(--radius-lg);padding:12px;display:flex;flex-direction:column;gap:9px;margin-bottom:8px;}
+.ctx-section-hd{font-size:10px;font-weight:600;color:var(--neutral-400);text-transform:uppercase;letter-spacing:.07em;padding:5px 0 4px;border-bottom:1px solid var(--neutral-100);margin-bottom:5px;}
+.ctx-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--neutral-100);cursor:pointer;}
+.ctx-item:last-child{border-bottom:none;}
+.ctx-cb{width:16px;height:16px;border-radius:3px;border:1.5px solid var(--neutral-400);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;}
+.ctx-cb.like-on{background:var(--teal-800);border-color:var(--teal-800);}
+.ctx-cb.dislike-on{background:var(--red-700);border-color:var(--red-700);}
+.ctx-lbl{font-size:12px;font-weight:600;color:var(--neutral-900);}
+.ctx-desc{font-size:11px;color:var(--neutral-400);margin-top:1px;line-height:1.4;}
+.ctx-select-all{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--radius-md);cursor:pointer;margin-bottom:9px;border:1.5px solid var(--neutral-200);background:#fff;}
+.ctx-select-all.like-all{background:var(--teal-100);border-color:var(--teal-600);}
+.ctx-select-all.dislike-all{background:var(--red-100);border-color:var(--red-700);}
+.sa-cb{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--neutral-400);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;}
+.sa-cb.like-on{background:var(--teal-800);border-color:var(--teal-800);}
+.sa-cb.dislike-on{background:var(--red-700);border-color:var(--red-700);}
+.sa-label{font-size:12px;font-weight:600;color:var(--neutral-900);}
+.sa-sub{font-size:10px;color:var(--neutral-400);margin-top:1px;}
+.pref-card{background:#fff;border:1px solid var(--neutral-100);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:6px;}
+.pref-food-name{font-size:13px;font-weight:600;color:var(--neutral-900);}
+.pref-note{font-size:11px;color:var(--neutral-400);margin-top:3px;line-height:1.5;}
+.ctx-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.ctx-tag{font-size:10px;padding:2px 6px;border-radius:20px;font-weight:500;}
+.ctx-like{background:var(--green-100);color:var(--green-900);border:1px solid var(--green-700);}
+.ctx-dislike{background:var(--red-100);color:var(--red-900);border:1px solid var(--red-700);}
+.allergy-chip{display:inline-flex;align-items:center;gap:4px;background:var(--red-100);border:1px solid var(--red-700);color:var(--red-900);font-size:11px;font-weight:600;padding:3px 8px 3px 10px;border-radius:20px;margin:2px;}
+.allergy-del{background:none;border:none;cursor:pointer;color:var(--red-700);font-size:13px;padding:0;font-family:inherit;line-height:1;}
+.form-btns{display:flex;gap:7px;} .form-btns .btn{flex:1;padding:9px;}
+.modal-bg{background:rgba(0,0,0,.45);padding:14px 12px;border-radius:var(--radius-lg);}
+.modal{background:#fff;border-radius:var(--radius-lg);padding:15px;display:flex;flex-direction:column;gap:10px;}
+.modal-title{font-size:14px;font-weight:700;color:var(--neutral-900);}
+.modal-btns{display:flex;gap:7px;} .modal-btns .btn{flex:1;}
+
+/* RECIPES */
+.rec-group-hd{font-size:11px;font-weight:600;color:var(--neutral-400);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 4px;border-bottom:1px solid var(--neutral-100);margin-bottom:4px;display:flex;justify-content:space-between;}
+.own-rec-card{background:#fff;border:1px solid var(--neutral-100);border-radius:var(--radius-lg);padding:11px 12px;display:flex;gap:10px;align-items:flex-start;margin-bottom:6px;}
+.rec-photo{width:52px;height:52px;border-radius:var(--radius-md);object-fit:cover;flex-shrink:0;border:1px solid var(--neutral-100);}
+.rec-photo-ph{width:52px;height:52px;border-radius:var(--radius-md);flex-shrink:0;background:var(--neutral-50);border:1px solid var(--neutral-100);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.rec-body{flex:1;min-width:0;}
+.rec-title{font-size:13px;font-weight:600;color:var(--neutral-900);}
+.rec-meta{font-size:11px;color:var(--neutral-400);margin-top:2px;line-height:1.5;}
+.scan-zone{border:1.5px dashed var(--neutral-200);border-radius:var(--radius-lg);padding:18px;text-align:center;cursor:pointer;background:var(--neutral-50);}
+
+/* SHOPPING */
+.list-item{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--neutral-100);font-size:13px;}
+.list-item:last-child{border-bottom:none;}
+.chk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--neutral-200);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;}
+.chk.done{background:var(--teal-600);border-color:var(--teal-600);color:#fff;}
+.ticked span{text-decoration:line-through;color:var(--neutral-400);}
+.cat-hd{font-size:10px;font-weight:600;color:var(--neutral-400);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 3px;border-bottom:1px solid var(--neutral-100);}
+.add-row{display:flex;gap:7px;} .add-row input{flex:1;}
+
+/* EXPORT */
+.week-export{background:var(--neutral-50);border:1px solid var(--neutral-100);border-radius:var(--radius-lg);padding:13px;font-size:11px;line-height:1.9;color:var(--neutral-900);white-space:pre-wrap;font-family:'SF Mono',Monaco,monospace;}
+.exp-btns{display:flex;flex-wrap:wrap;gap:7px;}
+.exp-btn{flex:1;min-width:100px;padding:9px;font-size:12px;font-weight:600;border-radius:var(--radius-md);cursor:pointer;font-family:inherit;text-align:center;border:1px solid var(--neutral-200);background:var(--neutral-50);color:var(--neutral-600);}
+.export-note{font-size:11px;color:var(--neutral-400);margin-top:6px;text-align:center;}
+</style>
+</head>
+<body>
+<div id="app">
+<div class="topbar">
+  <div><h1>Family Meal Planner</h1><div class="sub">UK household · Claude AI</div></div>
+  <div class="wk-badge" id="wk-badge">Week 1</div><!-- FIX #15 updated by JS -->
+</div>
+<div class="tabbar">
+  <div class="tab active" data-tab="planner" onclick="goTab(this)"><span class="ti">📅</span>Planner</div>
+  <div class="tab" data-tab="home" onclick="goTab(this)"><span class="ti">🏠</span>Members</div>
+  <div class="tab" data-tab="settings" onclick="goTab(this)"><span class="ti">⚙️</span>Settings</div>
+  <div class="tab" data-tab="recipes" onclick="goTab(this)"><span class="ti">📖</span>Recipes</div>
+  <div class="tab" data-tab="shop" onclick="goTab(this)"><span class="ti">🛒</span>Shop</div>
+  <div class="tab" data-tab="export" onclick="goTab(this)"><span class="ti">📤</span>Export</div>
+</div>
+
+<!-- PLANNER -->
+<div class="screen active" id="screen-planner">
+  <div class="day-nav">
+    <button class="nav-arrow" id="prev-day" onclick="changeDay(-1)">‹</button>
+    <div style="text-align:center;">
+      <div class="day-nav-name" id="day-nav-name">—</div>
+      <div class="day-nav-date" id="day-nav-date">Set up members first</div>
+    </div>
+    <button class="nav-arrow" id="next-day" onclick="changeDay(1)">›</button>
+  </div>
+  <div id="meal-blocks-area">
+    <!-- FIX #10: onboarding shown when no members -->
+    <div class="onboard-banner" id="onboard-msg">
+      <h2>Welcome to Family Meal Planner</h2>
+      <p>Get started in three steps — tap each one below:</p>
+      <div class="onboard-steps">
+        <div class="onboard-step" onclick="goTabByName('home')">
+          <div class="onboard-step-num">1</div>
+          <div class="onboard-step-txt">Add household members →</div>
+        </div>
+        <div class="onboard-step" onclick="goTabByName('settings')">
+          <div class="onboard-step-num">2</div>
+          <div class="onboard-step-txt">Choose meal slots in Settings →</div>
+        </div>
+        <div class="onboard-step" onclick="applySettings()">
+          <div class="onboard-step-num">3</div>
+          <div class="onboard-step-txt">Save settings to build your planner →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MEMBERS -->
+<div class="screen" id="screen-home">
+  <div class="sec-hd"><span>Household members</span><button class="btn-sm btn-teal" onclick="openAddMember()">+ Add</button></div>
+  <div id="member-list"><div class="empty">No members yet.</div></div>
+  <div class="card">
+    <div class="card-title">Pantry staples</div>
+    <input type="text" id="pantry" placeholder="e.g. onions, garlic, tinned tomatoes, pasta…" oninput="saveToStorage()">
+  </div>
+  <div id="add-member-form" style="display:none;">
+    <div class="modal-bg"><div class="modal">
+      <div class="modal-title">Add household member</div>
+      <input type="text" id="nm-name" placeholder="Name">
+      <div class="card-title" style="margin-top:4px;">Default diet</div>
+      <div class="chip-row" id="nm-diet">
+        <div class="chip on" onclick="soloChip(this,'nm-diet')">Standard</div>
+        <div class="chip" onclick="soloChip(this,'nm-diet')">Slimming World</div>
+        <div class="chip" onclick="soloChip(this,'nm-diet')">Low carb / HP</div>
+        <div class="chip" onclick="soloChip(this,'nm-diet')">Fasting</div>
+        <div class="chip" onclick="soloChip(this,'nm-diet')">Making own</div>
+      </div>
+      <div class="modal-btns">
+        <button class="btn" onclick="saveMember()">Save member</button>
+        <button class="btn-sm btn-danger" onclick="closeAddMember()">Cancel</button>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- MEMBER DETAIL -->
+<div class="screen" id="screen-member">
+  <button class="back-btn" onclick="goBack('home')">← All members</button>
+  <div class="detail-hd" id="detail-hd"></div>
+  <div class="card">
+    <div class="pref-section-hd"><span style="color:var(--green-700);">Likes</span><button class="btn-sm btn-green" onclick="openPrefForm('like')">+ Add like</button></div>
+    <div id="like-form"></div>
+    <div id="likes-list"><div class="empty" style="padding:10px 0;">No likes added yet.</div></div>
+  </div>
+  <div class="card">
+    <div class="pref-section-hd"><span style="color:var(--red-700);">Dislikes</span><button class="btn-sm btn-danger" onclick="openPrefForm('dislike')">+ Add dislike</button></div>
+    <div id="dislike-form"></div>
+    <div id="dislikes-list"><div class="empty" style="padding:10px 0;">No dislikes added yet.</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Allergies &amp; must-avoid</div>
+    <div class="sublbl">Always excluded — no context needed.</div>
+    <div id="allergy-row" style="flex-wrap:wrap;display:flex;margin-bottom:8px;"></div>
+    <div class="add-row">
+      <input type="text" id="allergy-in" placeholder="e.g. nuts, shellfish…" onkeydown="if(event.key==='Enter')addAllergy()">
+      <button class="btn-sm btn-danger" onclick="addAllergy()">Add</button>
+    </div>
+  </div>
+  <button class="btn" onclick="goBack('home')">Done</button>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="card">
+    <div class="card-title">Week starts on</div>
+    <div class="sublbl">Sets the first day shown in the Planner.</div>
+    <div class="chip-row" id="week-start-chips">
+      <div class="chip on" onclick="soloChip(this,'week-start-chips')">Monday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Tuesday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Wednesday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Thursday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Friday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Saturday</div>
+      <div class="chip" onclick="soloChip(this,'week-start-chips')">Sunday</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Global meal slots</div>
+    <div class="sublbl">Up to 5 meals per day for the whole household. Override per member below.</div>
+    <div class="meal-slot-toggle" id="global-meal-slots">
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Breakfast</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Brunch</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Lunch</div>
+      <div class="mst on" onclick="togMst(this,'global-meal-slots')">Dinner</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Tea</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Supper</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Snack</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Fasting</div>
+      <div class="mst" onclick="togMst(this,'global-meal-slots')">Skip</div>
+    </div>
+    <div class="mst-limit-note" id="global-slot-count">1 of 5 selected</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Per-member meal slot overrides</div>
+    <div class="sublbl">Fasting members are locked to Fasting automatically.</div>
+    <div id="member-meal-settings"><div class="empty" style="padding:10px 0;">Add members first.</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Recipe sources</div>
+    <div class="chip-row" id="recipe-source-chips">
+      <div class="chip on" onclick="tog(this)">Pinch of Nom</div>
+      <div class="chip on" onclick="tog(this)">BBC Good Food</div>
+      <div class="chip on" onclick="tog(this)">ZOE</div>
+      <div class="chip on" onclick="tog(this)">My recipes</div>
+    </div>
+  </div>
+  <!-- FIX #6: warn before clearing plan, week-start change warning handled in JS -->
+  <button class="btn" onclick="applySettings()">Save settings &amp; update planner</button>
+</div>
+
+<!-- RECIPES -->
+<div class="screen" id="screen-recipes">
+  <div class="sec-hd"><span>My recipes</span></div>
+  <div class="card">
+    <div class="card-title">Scan from cookbook photo</div>
+    <div class="sublbl">Photograph one or more pages — Claude extracts and auto-categorises.</div>
+    <input type="file" id="photo-input" accept="image/*" multiple style="display:none;" onchange="handlePhotos(event)">
+    <div class="scan-zone" onclick="document.getElementById('photo-input').click()">
+      <div style="font-size:22px;margin-bottom:5px;">📷</div>
+      <div style="font-size:13px;color:var(--neutral-400);">Tap to add cookbook photo(s)</div>
+    </div>
+    <div id="photos-row" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;"></div>
+    <div id="scan-status"></div>
+    <div id="scan-preview" style="display:none;margin-top:8px;">
+      <div class="card-title">Claude's analysis</div>
+      <div id="scan-result-area"></div>
+      <div style="display:flex;gap:7px;margin-top:8px;">
+        <button class="btn" onclick="confirmScan()">Save recipe</button>
+        <button class="btn-sm btn-danger" onclick="cancelScan()">Discard</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Add manually or by URL</div>
+    <input type="text" id="mr-title" placeholder="Recipe title" style="margin-bottom:6px;">
+    <input type="url" id="mr-url" placeholder="URL (optional)" style="margin-bottom:6px;">
+    <textarea id="mr-notes" placeholder="Ingredients and method in your own words…"></textarea>
+    <div class="card-title" style="margin-top:8px;">Serves</div>
+    <div class="chip-row" id="mr-serves">
+      <div class="chip on" onclick="soloChip(this,'mr-serves')">2</div>
+      <div class="chip" onclick="soloChip(this,'mr-serves')">4</div>
+      <div class="chip" onclick="soloChip(this,'mr-serves')">6</div>
+    </div>
+    <!-- FIX #3: button has explicit id instead of fragile nth-child selector -->
+    <button class="btn" id="save-manual-recipe-btn" style="margin-top:9px;" onclick="saveManualRecipe()">Save &amp; auto-categorise ↗</button>
+  </div>
+  <div id="recipe-groups"></div>
+</div>
+
+<!-- SHOP -->
+<div class="screen" id="screen-shop">
+  <div class="sec-hd"><span>Shopping list</span><button class="btn-sm btn-danger" onclick="clearShopList()">Clear all</button></div>
+  <div id="shop-body"><div class="empty">Items added when you choose a meal.</div></div>
+  <div class="add-row" style="margin-top:4px;">
+    <input type="text" id="shop-manual" placeholder="Add item manually…" onkeydown="if(event.key==='Enter')addShopManual()">
+    <button class="btn-sm btn-teal" onclick="addShopManual()">+ Add</button>
+  </div>
+</div>
+
+<!-- EXPORT -->
+<div class="screen" id="screen-export">
+  <div class="sec-hd"><span>Export weekly menu</span></div>
+  <div id="export-preview"><div class="empty">Choose meals in the Planner first.</div></div>
+  <!-- FIX #17: note about omitted days -->
+  <div class="export-note" id="export-note" style="display:none;">Only days with at least one meal chosen are shown. Days still being planned are omitted.</div>
+  <div class="exp-btns" id="exp-btns" style="display:none;margin-top:8px;">
+    <button class="exp-btn" onclick="copyMenu()">📋 Copy</button>
+    <button class="exp-btn" onclick="shareMsg()">💬 iMessage</button>
+    <button class="exp-btn" onclick="shareWA()">📱 WhatsApp</button>
+  </div>
+</div>
+</div><!-- end #app -->
+
+<script>
+// ═══════════════════════════════════════════
+// FIX #1 NOTE: In production, replace ALL fetch() calls to
+// api.anthropic.com with calls to your own server-side proxy endpoint,
+// e.g. fetch('/api/claude', { method:'POST', body:... })
+// The proxy holds your API key securely server-side.
+// ═══════════════════════════════════════════
+
+// ═══ STATE ═══
+// FIX #5: removed unused prevScreenId variable
+var members=[], shopItems=[], ownRecipes=[], scanPages=[], scanData=null;
+var currentMemberId=null;
+var weekStart="Monday";
+var globalMealSlots=["Dinner"];
+var memberMealSlots={};
+// weekPlan: day -> slotKey -> {memberModes, chosenMeal, suggestions, loaded, mealBuyItems}
+var weekPlan={};
+// FIX #12: use "||" separator instead of ":" to avoid colon-in-title bug
+var standardMeals={};
+var currentDayIdx=0;
+// FIX #11: track which blocks are open to survive re-renders
+var openBlocks=new Set();
+// FIX #8: track week offset for multi-week planning
+var weekOffset=0;
+
+var DAYS_OF_WEEK=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+var ALL_SLOTS=["Breakfast","Brunch","Lunch","Dinner","Tea","Supper","Snack","Fasting","Skip"];
+var MEAL_MODES=["Standard","Slimming World","Low carb / HP","Fasting","Skip"];
+var GROUPS=["Slimming World","Low carb / HP","General Eating","Treat Meal"];
+var AVC=[{bg:"#E1F5EE",fg:"#085041"},{bg:"#EEEDFE",fg:"#3C3489"},{bg:"#FAEEDA",fg:"#633806"},{bg:"#FAECE7",fg:"#712B13"},{bg:"#E6F1FB",fg:"#0C447C"},{bg:"#EAF3DE",fg:"#27500A"}];
+var SLOT_CONTEXT={
+  "Breakfast":"breakfast only — cereal, toast, eggs, porridge, yogurt, fruit, smoothies, pastries, cooked breakfast items. Do NOT suggest lunch or dinner dishes.",
+  "Brunch":"brunch — eggs benedict, pancakes, avocado toast, full English, waffles, French toast, smoked salmon bagels. Do NOT suggest dinner dishes.",
+  "Lunch":"lunch — sandwiches, soups, salads, wraps, light hot dishes, leftovers. Not heavy evening meals.",
+  "Dinner":"dinner / main evening meal — full cooked meals, pasta, roasts, curries, stir-fries, casseroles, family recipes.",
+  "Tea":"early evening family tea — lighter than dinner, child-friendly, quick to prepare.",
+  "Supper":"light supper — soup, cheese on toast, small plates, leftovers. Not a full dinner.",
+  "Snack":"snacks ONLY — fruit, nuts, yogurt, hummus and veg, rice cakes, small bites. Absolutely NOT main meals.",
+  "Fasting":"member is fasting — do not suggest food.",
+  "Skip":"member is skipping this meal — do not suggest food."
+};
+var CTX_SECTIONS=[
+  {id:"cooking",title:"Cooking methods — how the food is cooked",items:[
+    {id:"fried",label:"Fried",desc:"Cooked in oil or fat — shallow-fried, deep-fried, or stir-fried (e.g. fried egg, stir-fried chicken)"},
+    {id:"grilled",label:"Grilled",desc:"Cooked under direct overhead heat (e.g. grilled bacon, grilled mushrooms)"},
+    {id:"roasted",label:"Roasted",desc:"Cooked in the oven with dry heat (e.g. roast potatoes, roasted veg)"},
+    {id:"boiled",label:"Boiled",desc:"Cooked in bubbling water or stock (e.g. boiled egg, boiled potatoes)"},
+    {id:"steamed",label:"Steamed",desc:"Cooked over simmering water (e.g. steamed broccoli, steamed fish)"},
+    {id:"poached",label:"Poached",desc:"Gently cooked in barely simmering liquid (e.g. poached egg, poached salmon)"},
+    {id:"baked",label:"Baked",desc:"Cooked in the oven in a dish or tin (e.g. pasta bake, baked potato)"},
+    {id:"slow_cooked",label:"Slow cooked",desc:"Cooked low and slow (e.g. slow cooker stew, pulled pork)"},
+    {id:"sauteed",label:"Sautéed / pan-fried",desc:"Quickly cooked in a little fat (e.g. sautéed mushrooms, pan-fried salmon)"},
+    {id:"braised",label:"Braised / stewed",desc:"Browned then simmered slowly in liquid (e.g. beef stew, lamb casserole)"}
+  ]},
+  {id:"serving",title:"Serving style — how it arrives on the plate",items:[
+    {id:"raw",label:"Raw / uncooked",desc:"Served without cooking (e.g. raw tomato in salad, raw onion)"},
+    {id:"sliced",label:"Sliced or in whole pieces",desc:"Visible on the plate (e.g. sliced tomato, whole mushroom)"},
+    {id:"in_sauce",label:"In a sauce or gravy",desc:"Mixed into liquid sauce or stew (e.g. tomatoes in pasta sauce)"},
+    {id:"as_topping",label:"As a topping or garnish",desc:"Added on top (e.g. fried egg on a burger)"},
+    {id:"on_side",label:"As a side dish",desc:"Served separately alongside the main"},
+    {id:"blended",label:"Blended or puréed",desc:"Completely smooth (e.g. tomato soup, mushroom sauce)"}
+  ]},
+  {id:"role",title:"Role in the dish — how it features in a recipe",items:[
+    {id:"hidden",label:"As a hidden ingredient",desc:"Present but not visible or directly tasted (e.g. onion in a sauce)"},
+    {id:"main",label:"As the main centrepiece",desc:"The star of the dish (e.g. whole roast chicken, a steak)"},
+    {id:"in_baking",label:"In baking or batter",desc:"Used in a baked recipe (e.g. eggs in Yorkshire pudding batter)"},
+    {id:"stuffed",label:"Stuffed inside or as a filling",desc:"Used as a filling (e.g. mushrooms in a Wellington)"}
+  ]}
+];
+var ALL_CTX_IDS=CTX_SECTIONS.flatMap(s=>s.items.map(i=>i.id));
+
+// ═══ PERSISTENCE — FIX #2 ═══
+function saveToStorage(){
+  try{
+    var state={
+      members,weekStart,globalMealSlots,memberMealSlots,weekPlan,
+      standardMeals,ownRecipes,shopItems,currentDayIdx,weekOffset,
+      pantry:document.getElementById("pantry")?document.getElementById("pantry").value:""
+    };
+    localStorage.setItem("fmp_v9",JSON.stringify(state));
+  }catch(e){console.warn("Storage save failed",e);}
+}
+function loadFromStorage(){
+  try{
+    var raw=localStorage.getItem("fmp_v9");
+    if(!raw)return false;
+    var s=JSON.parse(raw);
+    members=s.members||[];
+    weekStart=s.weekStart||"Monday";
+    globalMealSlots=s.globalMealSlots||["Dinner"];
+    memberMealSlots=s.memberMealSlots||{};
+    weekPlan=s.weekPlan||{};
+    standardMeals=s.standardMeals||{};
+    ownRecipes=s.ownRecipes||[];
+    shopItems=s.shopItems||[];
+    currentDayIdx=s.currentDayIdx||0;
+    weekOffset=s.weekOffset||0;
+    if(s.pantry){var p=document.getElementById("pantry");if(p)p.value=s.pantry;}
+    return true;
+  }catch(e){console.warn("Storage load failed",e);return false;}
+}
+
+// ═══ UTILS ═══
+function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function initials(n){return n.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);}
+function tog(el){el.classList.toggle("on");saveToStorage();}
+function togMst(el,gid){
+  var on=[...document.querySelectorAll("#"+gid+" .mst.on")];
+  if(el.classList.contains("on")){el.classList.remove("on");}
+  else if(on.length<5){el.classList.add("on");}
+  // FIX #9: update count label if present
+  var countEl=document.getElementById(gid==="global-meal-slots"?"global-slot-count":null);
+  if(countEl){var n=document.querySelectorAll("#"+gid+" .mst.on").length;countEl.textContent=n+" of 5 selected";}
+}
+function soloChip(el,gid){document.querySelectorAll("#"+gid+" .chip").forEach(c=>c.classList.remove("on"));el.classList.add("on");}
+function getChipVal(gid){var c=document.querySelector("#"+gid+" .chip.on");return c?c.textContent.trim():"";}
+function getMsts(gid){return[...document.querySelectorAll("#"+gid+" .mst.on")].map(c=>c.textContent.trim());}
+function mbc(m){if(m==="Slimming World")return"b-sw";if(m==="Low carb / HP")return"b-lc";if(m==="Fasting")return"b-fast";if(m==="Making own"||m==="Skip")return"b-own";return"b-std";}
+function getOrderedDays(){
+  var idx=DAYS_OF_WEEK.indexOf(weekStart);
+  return DAYS_OF_WEEK.slice(idx).concat(DAYS_OF_WEEK.slice(0,idx));
+}
+function getMemberSlotsForDay(mid){
+  return(memberMealSlots[mid]&&memberMealSlots[mid].length)?memberMealSlots[mid]:globalMealSlots;
+}
+// FIX #12: safe standard meal key using "||" separator
+function stdKey(slot,title){return slot+"||"+title;}
+function stdSlot(key){return key.split("||")[0];}
+function stdTitle(key){return key.split("||").slice(1).join("||");}
+// FIX #8: get current week start date
+function getWeekStartDate(){
+  var today=new Date();
+  var dayIdx=today.getDay(); // 0=Sun
+  var startIdx=DAYS_OF_WEEK.indexOf(weekStart);
+  var adjustedStart=(startIdx+1)%7; // convert Mon=0 system to Sun=0
+  var diff=(dayIdx-adjustedStart+7)%7;
+  var startDate=new Date(today);
+  startDate.setDate(today.getDate()-diff+(weekOffset*7));
+  return startDate;
+}
+function formatDate(date){
+  return date.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+}
+function updateWkBadge(){
+  var d=getWeekStartDate();
+  var end=new Date(d);end.setDate(d.getDate()+6);
+  document.getElementById("wk-badge").textContent=formatDate(d)+" – "+formatDate(end);
+}
+function getDayDate(idx){
+  var start=getWeekStartDate();
+  var d=new Date(start);d.setDate(start.getDate()+idx);
+  return d;
+}
+
+// ═══ NAVIGATION ═══
+function goTab(el){
+  var tab=el.dataset.tab;
+  if(tab==="home"&&currentMemberId){goBack("home");return;}
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("screen-"+tab).classList.add("active");
+  if(tab==="planner")renderPlannerDay();
+  if(tab==="export")renderExport();
+  if(tab==="recipes")renderRecipeGroups();
+  if(tab==="settings")renderMemberMealSettings();
+  if(tab==="home")renderMemberList();
+}
+function goTabByName(name){
+  var el=document.querySelector('.tab[data-tab="'+name+'"]');
+  if(el)goTab(el);
+}
+function goBack(to){
+  currentMemberId=null;
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("screen-"+to).classList.add("active");
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===to));
+  if(to==="home")renderMemberList();
+  saveToStorage();
+}
+
+// ═══ SETTINGS ═══
+function applySettings(){
+  var newStart=getChipVal("week-start-chips")||"Monday";
+  var newSlots=getMsts("global-meal-slots");
+  if(!newSlots.length)newSlots=["Dinner"];
+
+  // FIX #6: only clear plan if week-start day changed; warn user
+  var startChanged=newStart!==weekStart;
+  if(startChanged&&Object.keys(weekPlan).length>0){
+    if(!confirm("Changing the week start day will clear your current meal plan. Continue?")){
+      // revert chip
+      document.querySelectorAll("#week-start-chips .chip").forEach(c=>{c.classList.toggle("on",c.textContent.trim()===weekStart);});
+      return;
+    }
+    weekPlan={};currentDayIdx=0;openBlocks.clear();
+  }
+  weekStart=newStart;
+  globalMealSlots=newSlots;
+
+  // Read per-member overrides
+  members.forEach(m=>{
+    var el=document.getElementById("mm-slots-"+m.id);
+    if(el){
+      var slots=getMsts("mm-slots-"+m.id);
+      memberMealSlots[m.id]=slots.length?slots:null;
+    }
+  });
+
+  saveToStorage();
+  updateWkBadge();
+  goTabByName("planner");
+  renderPlannerDay();
+}
+
+function renderMemberMealSettings(){
+  var el=document.getElementById("member-meal-settings");
+  if(!members.length){el.innerHTML='<div class="empty" style="padding:10px 0;">Add members first.</div>';return;}
+  el.innerHTML=members.map(m=>{
+    // FIX #7: fasting members locked — show label not buttons
+    var isFasting=m.defaultMode==="Fasting";
+    var slots=memberMealSlots[m.id]||[...globalMealSlots];
+    return`<div style="padding:9px 0;border-bottom:1px solid var(--neutral-100);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div class="av" style="width:26px;height:26px;font-size:10px;background:${m.bg};color:${m.fg};">${initials(m.name)}</div>
+        <div style="font-size:12px;font-weight:600;">${esc(m.name)}</div>
+        ${isFasting?'<span class="badge b-fast">Fasting — all meals auto-skipped</span>':""}
+      </div>
+      ${isFasting
+        ?`<div style="font-size:11px;color:var(--amber-700);font-style:italic;">This member's diet is set to Fasting. They will be excluded from all portion calculations automatically.</div>`
+        :`<div class="meal-slot-toggle" id="mm-slots-${m.id}">
+          ${ALL_SLOTS.filter(s=>s!=="Fasting"&&s!=="Skip").map(s=>`<div class="mst${slots.includes(s)?" on":""}" onclick="togMstMember(this,'mm-slots-${m.id}')">${esc(s)}</div>`).join("")}
+        </div>`
+      }
+    </div>`;
+  }).join("");
+}
+
+// FIX #9: per-member slot toggle with max-5 cap
+function togMstMember(el,gid){
+  var on=[...document.querySelectorAll("#"+gid+" .mst.on")];
+  if(el.classList.contains("on")){el.classList.remove("on");}
+  else if(on.length<5){el.classList.add("on");}
+}
+
+// ═══ MEMBERS ═══
+function openAddMember(){document.getElementById("add-member-form").style.display="block";document.getElementById("nm-name").value="";soloChip(document.querySelector("#nm-diet .chip"),"nm-diet");}
+function closeAddMember(){document.getElementById("add-member-form").style.display="none";}
+function saveMember(){
+  var name=document.getElementById("nm-name").value.trim();if(!name)return;
+  var diet=getChipVal("nm-diet")||"Standard";
+  var c=AVC[members.length%AVC.length];
+  members.push({id:"m"+Date.now(),name,defaultMode:diet,bg:c.bg,fg:c.fg,likes:[],dislikes:[],allergies:[]});
+  closeAddMember();renderMemberList();saveToStorage();
+}
+// FIX #4: confirm before deleting a member
+function deleteMember(id){
+  var m=members.find(x=>x.id===id);
+  if(!m)return;
+  if(!confirm("Remove "+m.name+"? This will delete all their preferences and cannot be undone."))return;
+  members=members.filter(x=>x.id!==id);
+  renderMemberList();saveToStorage();
+}
+function openMemberDetail(id){
+  currentMemberId=id;var m=members.find(x=>x.id===id);if(!m)return;
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("screen-member").classList.add("active");
+  document.getElementById("detail-hd").innerHTML=`<div class="av" style="width:40px;height:40px;font-size:14px;background:${m.bg};color:${m.fg};">${initials(m.name)}</div><div><div class="detail-name">${esc(m.name)}</div><span class="badge ${mbc(m.defaultMode)}">${esc(m.defaultMode)}</span></div>`;
+  document.getElementById("like-form").innerHTML="";
+  document.getElementById("dislike-form").innerHTML="";
+  renderLikes();renderDislikes();renderAllergies();
+}
+function renderMemberList(){
+  var el=document.getElementById("member-list");
+  if(!members.length){el.innerHTML='<div class="empty">No members yet. Tap + Add to get started.</div>';return;}
+  el.innerHTML=members.map(m=>{
+    var total=m.likes.length+m.dislikes.length+m.allergies.length;
+    var sub=total?total+" preference"+(total>1?"s":"")+" saved":"Tap to add food preferences";
+    return`<div class="member-row" onclick="openMemberDetail('${m.id}')">
+      <div class="av" style="width:34px;height:34px;font-size:12px;background:${m.bg};color:${m.fg};">${initials(m.name)}</div>
+      <div style="flex:1;min-width:0;"><div class="member-name-txt">${esc(m.name)}</div><div class="member-sub"><span class="badge ${mbc(m.defaultMode)}">${esc(m.defaultMode)}</span> ${esc(sub)}</div></div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn-sm btn-danger" onclick="event.stopPropagation();deleteMember('${m.id}')">Remove</button>
+        <span class="chevron">›</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ═══ PREFERENCES ═══
+function buildCtxForm(type,existing){
+  var isLike=type==="like",onCls=isLike?"like-on":"dislike-on";
+  var existCtx=(existing&&existing.contexts)||[];
+  var allSel=ALL_CTX_IDS.every(id=>existCtx.includes(id));
+  var selectAllRow=`<div class="ctx-select-all${allSel?(isLike?" like-all":" dislike-all"):""}" id="${type}-select-all-row" onclick="toggleSelectAll('${type}')"><div class="sa-cb${allSel?" "+onCls:""}" id="${type}-sa-cb">${allSel?"✓":""}</div><div><div class="sa-label">Select all 20 — every context in one tap</div><div class="sa-sub">Tap to select all, then untick exceptions below</div></div></div>`;
+  var sections=CTX_SECTIONS.map(sec=>`<div style="margin-bottom:5px;"><div class="ctx-section-hd">${esc(sec.title)}</div>${sec.items.map(item=>{var on=existCtx.includes(item.id);return`<div class="ctx-item" onclick="toggleCtxItem(this,'${type}')"><div class="ctx-cb${on?" "+onCls:""}" data-id="${item.id}">${on?"✓":""}</div><div style="flex:1;min-width:0;"><div class="ctx-lbl">${esc(item.label)}</div><div class="ctx-desc">${esc(item.desc)}</div></div></div>`;}).join("")}</div>`).join("");
+  return`<div class="pref-form" id="${type}-pref-form-inner"><div style="font-size:13px;font-weight:600;">${isLike?"Add a like":"Add a dislike"}</div><div class="sublbl" style="margin-bottom:2px;">Food item</div><input type="text" id="${type}-food-in" placeholder="e.g. eggs, tomatoes, mushrooms…" value="${esc(existing?existing.food:"")}"><div class="sublbl" style="margin-top:4px;margin-bottom:4px;">How — tick all that apply</div>${selectAllRow}${sections}<div class="sublbl" style="margin-top:2px;margin-bottom:2px;">Your own note <span style="opacity:.6;">(optional)</span></div><textarea id="${type}-note-in" placeholder="e.g. likes eggs in Yorkshire pudding batter but not boiled or fried as a standalone…">${esc(existing?existing.note:"")}</textarea><div class="form-btns"><button class="btn${isLike?"":" btn-danger"}" style="${isLike?"":"background:var(--red-700);"}" onclick="savePref('${type}')">Save</button><button class="btn-sm" onclick="closePrefForm('${type}')">Cancel</button></div></div>`;
+}
+function toggleSelectAll(type){
+  var form=document.getElementById(type+"-pref-form-inner");if(!form)return;
+  var onCls=type==="like"?"like-on":"dislike-on",saCb=document.getElementById(type+"-sa-cb"),saRow=document.getElementById(type+"-select-all-row");
+  var allCbs=[...form.querySelectorAll(".ctx-cb")],allOn=allCbs.every(cb=>cb.classList.contains(onCls));
+  if(allOn){allCbs.forEach(cb=>{cb.classList.remove(onCls);cb.textContent="";});saCb.classList.remove(onCls);saCb.textContent="";saRow.classList.remove("like-all","dislike-all");}
+  else{allCbs.forEach(cb=>{cb.classList.add(onCls);cb.textContent="✓";});saCb.classList.add(onCls);saCb.textContent="✓";saRow.classList.add(type==="like"?"like-all":"dislike-all");}
+}
+function syncSelectAll(type){
+  var form=document.getElementById(type+"-pref-form-inner");if(!form)return;
+  var onCls=type==="like"?"like-on":"dislike-on",saCb=document.getElementById(type+"-sa-cb"),saRow=document.getElementById(type+"-select-all-row");
+  var allCbs=[...form.querySelectorAll(".ctx-cb")],allOn=allCbs.every(cb=>cb.classList.contains(onCls));
+  saCb.classList.toggle(onCls,allOn);saCb.textContent=allOn?"✓":"";
+  saRow.classList.toggle("like-all",allOn&&type==="like");saRow.classList.toggle("dislike-all",allOn&&type==="dislike");
+}
+function openPrefForm(type){var el=document.getElementById(type+"-form");el.innerHTML=buildCtxForm(type,null);el.scrollIntoView({behavior:"smooth",block:"nearest"});}
+function closePrefForm(type){document.getElementById(type+"-form").innerHTML="";}
+function toggleCtxItem(row,type){var cb=row.querySelector(".ctx-cb"),onCls=type==="like"?"like-on":"dislike-on";var isOn=cb.classList.contains(onCls);if(isOn){cb.classList.remove(onCls);cb.textContent="";}else{cb.classList.add(onCls);cb.textContent="✓";}syncSelectAll(type);}
+function getSelectedCtx(type){var form=document.getElementById(type+"-pref-form-inner");if(!form)return[];return[...form.querySelectorAll(".ctx-cb.like-on,.ctx-cb.dislike-on")].map(cb=>cb.dataset.id);}
+function savePref(type){
+  var m=members.find(x=>x.id===currentMemberId);if(!m)return;
+  var food=document.getElementById(type+"-food-in").value.trim();if(!food)return;
+  var note=document.getElementById(type+"-note-in").value.trim(),contexts=getSelectedCtx(type);
+  (type==="like"?m.likes:m.dislikes).push({id:"p"+Date.now(),food,note,contexts});
+  closePrefForm(type);type==="like"?renderLikes():renderDislikes();saveToStorage();
+}
+function deletePref(type,pid){
+  var m=members.find(x=>x.id===currentMemberId);if(!m)return;
+  if(type==="like")m.likes=m.likes.filter(p=>p.id!==pid);else m.dislikes=m.dislikes.filter(p=>p.id!==pid);
+  type==="like"?renderLikes():renderDislikes();saveToStorage();
+}
+function ctxLabel(id){for(var s of CTX_SECTIONS)for(var i of s.items)if(i.id===id)return i.label;return id;}
+function renderPrefList(arr,containerId,type){
+  var el=document.getElementById(containerId);
+  if(!arr.length){el.innerHTML=`<div class="empty" style="padding:10px 0;">No ${type}s added yet.</div>`;return;}
+  var tagCls=type==="like"?"ctx-like":"ctx-dislike";
+  el.innerHTML=arr.map(p=>`<div class="pref-card"><div style="display:flex;justify-content:space-between;gap:8px;"><div class="pref-food-name">${esc(p.food)}</div><button class="btn-sm btn-danger" onclick="deletePref('${type}','${p.id}')">Del</button></div>${p.contexts&&p.contexts.length?`<div class="ctx-tags">${p.contexts.map(c=>`<span class="ctx-tag ${tagCls}">${esc(ctxLabel(c))}</span>`).join("")}</div>`:""}${p.note?`<div class="pref-note">${esc(p.note)}</div>`:""}</div>`).join("");
+}
+function renderLikes(){var m=members.find(x=>x.id===currentMemberId);if(m)renderPrefList(m.likes,"likes-list","like");}
+function renderDislikes(){var m=members.find(x=>x.id===currentMemberId);if(m)renderPrefList(m.dislikes,"dislikes-list","dislike");}
+function addAllergy(){var inp=document.getElementById("allergy-in"),v=inp.value.trim();if(!v)return;var m=members.find(x=>x.id===currentMemberId);if(!m)return;v.split(",").map(x=>x.trim()).filter(Boolean).forEach(a=>{if(!m.allergies.includes(a))m.allergies.push(a);});inp.value="";renderAllergies();saveToStorage();}
+function removeAllergy(v){var m=members.find(x=>x.id===currentMemberId);if(!m)return;m.allergies=m.allergies.filter(a=>a!==v);renderAllergies();saveToStorage();}
+function renderAllergies(){var m=members.find(x=>x.id===currentMemberId);if(!m)return;document.getElementById("allergy-row").innerHTML=m.allergies.map(a=>`<span class="allergy-chip">${esc(a)}<button class="allergy-del" onclick="removeAllergy('${esc(a)}')">×</button></span>`).join("");}
+
+// ═══ DAY PLANNER ═══
+function changeDay(dir){
+  var days=getOrderedDays();
+  currentDayIdx=Math.max(0,Math.min(days.length-1,currentDayIdx+dir));
+  saveToStorage();renderPlannerDay();
+}
+
+function renderPlannerDay(){
+  updateWkBadge();
+  var area=document.getElementById("meal-blocks-area");
+  if(!members.length){
+    area.innerHTML=document.getElementById("onboard-msg")?document.getElementById("onboard-msg").outerHTML:`<div class="onboard-banner"><h2>Welcome</h2><p>Add members and configure settings first.</p><div class="onboard-steps"><div class="onboard-step" onclick="goTabByName('home')"><div class="onboard-step-num">1</div><div class="onboard-step-txt">Add household members →</div></div><div class="onboard-step" onclick="goTabByName('settings')"><div class="onboard-step-num">2</div><div class="onboard-step-txt">Set up meal slots in Settings →</div></div></div></div>`;
+    document.getElementById("day-nav-name").textContent="—";
+    document.getElementById("day-nav-date").textContent="Set up members first";
+    return;
+  }
+  var days=getOrderedDays();
+  var day=days[currentDayIdx];
+  var dayDate=getDayDate(currentDayIdx);
+  document.getElementById("day-nav-name").textContent=day;
+  // FIX #8: show actual date
+  document.getElementById("day-nav-date").textContent=formatDate(dayDate);
+  document.getElementById("prev-day").disabled=currentDayIdx===0;
+  document.getElementById("next-day").disabled=currentDayIdx===days.length-1;
+
+  var allSlots=new Set();
+  members.forEach(m=>{getMemberSlotsForDay(m.id).forEach(s=>allSlots.add(s));});
+  var orderedSlots=ALL_SLOTS.filter(s=>allSlots.has(s));
+  if(!weekPlan[day])weekPlan[day]={};
+
+  var html="";
+  orderedSlots.forEach(slot=>{
+    var key=day+"::"+slot;
+    if(!weekPlan[day][slot])weekPlan[day][slot]={memberModes:{},chosenMeal:null,suggestions:[],loaded:false,mealBuyItems:[]};
+    var sd=weekPlan[day][slot];
+    var isFastSlot=slot==="Fasting"||slot==="Skip";
+    var eating=members.filter(m=>{
+      var mSlots=getMemberSlotsForDay(m.id);
+      if(!mSlots.includes(slot))return false;
+      // FIX #7: fasting members always excluded
+      if(m.defaultMode==="Fasting")return false;
+      var mode=sd.memberModes[m.id]||m.defaultMode;
+      return mode!=="Fasting"&&mode!=="Skip"&&!isFastSlot;
+    });
+    var statusTxt=isFastSlot?"":eating.length+" eating";
+    var chosenTxt=sd.chosenMeal?"✓ "+sd.chosenMeal.title:"";
+    var isDup=false;
+    if(sd.chosenMeal){
+      var dupDays=days.filter((d,i)=>i!==currentDayIdx&&weekPlan[d]&&Object.values(weekPlan[d]).some(x=>x.chosenMeal&&x.chosenMeal.title===sd.chosenMeal.title));
+      isDup=dupDays.length>0;
+    }
+    // FIX #11: restore open state
+    var isOpen=openBlocks.has(key);
+    html+=`<div class="meal-block">
+      <div class="meal-block-header" onclick="toggleMealBlock('${day}','${slot}')">
+        <div style="flex:1;min-width:0;">
+          <div class="meal-block-name">${esc(slot)}</div>
+          ${chosenTxt
+            ?`<div class="meal-block-chosen">${esc(chosenTxt)}${isDup?' <span style="color:var(--red-700);font-size:10px;">⚠ also this week</span>':""}</div>`
+            :`<div class="meal-block-status">${esc(statusTxt)}</div>`}
+        </div>
+        <span class="mb-chevron" id="chev-${key}" style="${isOpen?"transform:rotate(90deg)":""}">›</span>
+      </div>
+      <div class="meal-block-body${isOpen?" open":""}" id="block-body-${key}">
+        ${isFastSlot
+          ?`<div style="font-size:12px;color:var(--amber-700);font-style:italic;text-align:center;padding:6px;">No meal needed for ${slot}.</div>`
+          :`${buildMemberModeRows(day,slot)}
+           ${sd.loaded?buildSuggestions(day,slot,eating):`<button class="load-btn" onclick="loadSuggestions('${day}','${slot}')" id="load-btn-${key}">✦ Find ${slot} options</button>`}`
+        }
+      </div>
+    </div>`;
+  });
+  area.innerHTML=html||'<div class="empty">No meal slots configured — go to Settings.</div>';
+}
+
+function toggleMealBlock(day,slot){
+  var key=day+"::"+slot;
+  var body=document.getElementById("block-body-"+key);
+  var chev=document.getElementById("chev-"+key);
+  if(!body)return;
+  // FIX #11: track open state
+  if(openBlocks.has(key)){openBlocks.delete(key);body.classList.remove("open");if(chev)chev.style.transform="";}
+  else{openBlocks.add(key);body.classList.add("open");if(chev)chev.style.transform="rotate(90deg)";}
+}
+
+function buildMemberModeRows(day,slot){
+  var sd=weekPlan[day]&&weekPlan[day][slot];if(!sd)return"";
+  // FIX #7: fasting members shown as locked, not with buttons
+  var rows=members.filter(m=>getMemberSlotsForDay(m.id).includes(slot)).map(m=>{
+    var isMemberFasting=m.defaultMode==="Fasting";
+    if(isMemberFasting){
+      return`<div class="mem-meal-row">
+        <div class="mem-av-sm" style="background:${m.bg};color:${m.fg};">${initials(m.name)}</div>
+        <div class="mem-right">
+          <div class="mem-meal-name">${esc(m.name)}</div>
+          <div class="mem-fasting">Fasting — excluded from portions</div>
+        </div>
+      </div>`;
+    }
+    var mode=sd.memberModes[m.id]||m.defaultMode;
+    var isFast=mode==="Fasting"||mode==="Skip";
+    var btns=MEAL_MODES.map(mo=>{
+      var isSel=mode===mo;
+      var style=isSel?`background:${m.bg};color:${m.fg};border-color:${m.fg};font-weight:700;`:"";
+      return`<button class="mem-mode-btn${isSel?" sel":""}" style="${style}" onclick="setMemberMode('${day}','${slot}','${m.id}','${mo}')">${esc(mo==="Low carb / HP"?"LC/HP":mo==="Slimming World"?"SW":mo==="Making own"?"Own":mo)}</button>`;
+    }).join("");
+    return`<div class="mem-meal-row">
+      <div class="mem-av-sm" style="background:${m.bg};color:${m.fg};">${initials(m.name)}</div>
+      <div class="mem-right">
+        <div class="mem-meal-name">${esc(m.name)}</div>
+        <div class="mem-meal-mode">${btns}</div>
+        ${isFast?`<div class="mem-fasting">${mode} — not included in portions</div>`:""}
+      </div>
+    </div>`;
+  }).join("");
+  return rows?`<div style="border:1px solid var(--neutral-100);border-radius:var(--radius-md);padding:4px 8px;">${rows}</div>`:"";
+}
+
+function setMemberMode(day,slot,mid,mode){
+  if(!weekPlan[day])weekPlan[day]={};
+  if(!weekPlan[day][slot])weekPlan[day][slot]={memberModes:{},chosenMeal:null,suggestions:[],loaded:false,mealBuyItems:[]};
+  weekPlan[day][slot].memberModes[mid]=mode;
+  weekPlan[day][slot].loaded=false;weekPlan[day][slot].suggestions=[];
+  // Keep block open
+  openBlocks.add(day+"::"+slot);
+  saveToStorage();renderPlannerDay();
+}
+
+function buildSuggestions(day,slot,eating){
+  var sd=weekPlan[day][slot];
+  var suggs=sd.suggestions||[];
+  if(!suggs.length)return`<div style="font-size:12px;color:var(--neutral-400);text-align:center;padding:8px;">No suggestions yet.</div><button class="load-btn" onclick="loadSuggestions('${day}','${slot}')">✦ Find ${slot} options</button>`;
+  var days=getOrderedDays();
+  var stds=Object.keys(standardMeals).filter(k=>stdSlot(k)===slot).map(k=>stdTitle(k));
+  var cards=suggs.map((s,i)=>{
+    var isChosen=sd.chosenMeal&&sd.chosenMeal.title===s.title;
+    var isSt=stds.includes(s.title);
+    var dupDay=days.find((d,di)=>di!==currentDayIdx&&weekPlan[d]&&Object.values(weekPlan[d]).some(x=>x.chosenMeal&&x.chosenMeal.title===s.title));
+    return`<div class="sugg-card${isChosen?" chosen":""}${isSt&&!isChosen?" standard-pick":""}${dupDay?" dup-warn":""}" onclick="chooseMeal('${day}','${slot}',${i})">
+      ${isChosen?`<div class="sugg-tick">✓</div>`:""}
+      ${isSt?`<div class="std-star">⭐ Standard choice</div>`:""}
+      <div class="sugg-title">${esc(s.title)}</div>
+      ${dupDay?`<div class="dup-flag">⚠ Also on ${esc(dupDay)}</div>`:""}
+      ${s.why?`<div class="sugg-why">${esc(s.why)}</div>`:""}
+      <div class="sugg-meta">
+        ${s.source?`<span class="badge b-std">${esc(s.source)}</span>`:""}
+        ${s.suits_sw?'<span class="badge b-sw">SW</span>':""}
+        ${s.suits_lc?'<span class="badge b-lc">LC</span>':""}
+        ${s.link&&s.link!=="Own recipe"?`<a class="sugg-link" href="${esc(s.link)}" target="_blank" onclick="event.stopPropagation()">View recipe →</a>`:""}
+      </div>
+      ${s.buy&&s.buy.length?`<div style="font-size:10px;color:var(--neutral-400);margin-top:4px;">Likely need: ${s.buy.slice(0,5).map(esc).join(", ")}</div>`:""}
+      <!-- FIX #13: clear hint when chosen -->
+      ${isChosen?`<div class="chosen-hint">Tap again to remove this choice</div>`:""}
+      <div class="sugg-actions" onclick="event.stopPropagation()">
+        ${!isSt?`<button class="btn-sm btn-amber" onclick="markStandard('${slot}',\`${s.title.replace(/`/g,"\\`")}\`)">⭐ Set as standard</button>`:`<button class="btn-sm" onclick="unmarkStandard('${slot}',\`${s.title.replace(/`/g,"\\`")}\`)">Remove standard</button>`}
+      </div>
+    </div>`;
+  }).join("");
+  return`<div class="sugg-area">${cards}</div><button class="load-btn refresh" style="margin-top:6px;" onclick="loadSuggestions('${day}','${slot}')">↻ Refresh options</button>`;
+}
+
+// FIX #14: track which buy items belong to which meal so we can remove them on deselect
+function chooseMeal(day,slot,idx){
+  var sd=weekPlan[day][slot];
+  var s=sd.suggestions[idx];
+  var wasChosen=sd.chosenMeal&&sd.chosenMeal.title===s.title;
+  if(wasChosen){
+    // Remove this meal's buy items from shop
+    var toRemove=new Set((sd.mealBuyItems||[]).map(x=>x.toLowerCase().trim()));
+    shopItems=shopItems.filter(i=>!toRemove.has(i.name.toLowerCase().trim())||i.manual);
+    sd.chosenMeal=null;sd.mealBuyItems=[];
+  } else {
+    // Remove previous meal's buy items
+    var toRemove=new Set((sd.mealBuyItems||[]).map(x=>x.toLowerCase().trim()));
+    shopItems=shopItems.filter(i=>!toRemove.has(i.name.toLowerCase().trim())||i.manual);
+    sd.chosenMeal=s;
+    sd.mealBuyItems=s.buy||[];
+    (s.buy||[]).forEach(name=>{var n=name.toLowerCase().trim();if(!shopItems.find(i=>i.name===n))shopItems.push({cat:"To buy",name:n,done:false,manual:false});});
+  }
+  openBlocks.add(day+"::"+slot);
+  saveToStorage();renderPlannerDay();
+}
+
+// FIX #12: safe key using "||"
+function markStandard(slot,title){standardMeals[stdKey(slot,title)]=true;openBlocks.add(getOrderedDays()[currentDayIdx]+"::"+slot);saveToStorage();renderPlannerDay();}
+function unmarkStandard(slot,title){delete standardMeals[stdKey(slot,title)];openBlocks.add(getOrderedDays()[currentDayIdx]+"::"+slot);saveToStorage();renderPlannerDay();}
+
+async function loadSuggestions(day,slot){
+  var sd=weekPlan[day][slot];
+  var key=day+"::"+slot;
+  var btnId="load-btn-"+key;
+  var btn=document.getElementById(btnId);
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="pulse">Finding options…</span>';}
+  openBlocks.add(key);
+
+  var eating=members.filter(m=>{
+    var mSlots=getMemberSlotsForDay(m.id);
+    if(!mSlots.includes(slot))return false;
+    if(m.defaultMode==="Fasting")return false; // FIX #7
+    var mode=sd.memberModes[m.id]||m.defaultMode;
+    return mode!=="Fasting"&&mode!=="Skip"&&slot!=="Fasting"&&slot!=="Skip";
+  });
+  var portionCount=eating.length||1;
+  var diets=[...new Set(eating.map(m=>(sd.memberModes[m.id]||m.defaultMode)))].filter(d=>d!=="Standard"&&d!=="Making own");
+  var memberProfiles=eating.map(m=>{
+    var likes=m.likes.map(p=>p.food+(p.contexts.length?" (likes: "+p.contexts.map(ctxLabel).join(", ")+")":"")+(p.note?" — "+p.note:"")).join("; ");
+    var dislikes=m.dislikes.map(p=>p.food+(p.contexts.length?" (dislikes when: "+p.contexts.map(ctxLabel).join(", ")+")":"")+(p.note?" — "+p.note:"")).join("; ");
+    var allergies=m.allergies.join(", ");
+    return`${m.name}: ${sd.memberModes[m.id]||m.defaultMode}${likes?" | likes: "+likes:""}${dislikes?" | dislikes: "+dislikes:""}${allergies?" | ALWAYS EXCLUDE: "+allergies:""}`;
+  }).join("\n");
+  var days=getOrderedDays();
+  var alreadyPlanned=[];
+  days.forEach(d=>{if(weekPlan[d])Object.values(weekPlan[d]).forEach(x=>{if(x.chosenMeal)alreadyPlanned.push(x.chosenMeal.title);});});
+  var stds=Object.keys(standardMeals).filter(k=>stdSlot(k)===slot).map(k=>stdTitle(k));
+  var pantry=document.getElementById("pantry")?document.getElementById("pantry").value.trim():"";
+  var myRecs=ownRecipes.map(r=>`${r.title}(${r.category},serves ${r.serves})`).join("; ");
+
+  var sysPrompt=`You are a personal household recipe assistant for UK family cooking. Discovery and planning assistant — NOT a recipe database.
+Recommend from: Pinch of Nom (pinchofnom.com), ZOE (zoe.com/learn), BBC Good Food (bbcgoodfood.com), or saved household recipes. Never reproduce full recipes.
+
+MEAL SLOT: ${slot}. ${SLOT_CONTEXT[slot]||""}
+
+VARIETY: Do NOT suggest any of these already-planned meals: ${alreadyPlanned.join(", ")||"none"}.
+STANDARD MEALS for ${slot}: ${stds.join(", ")||"none"}. If any exist, include one as a suggestion and mark is_standard:true.
+PORTIONS: Suggest for ${portionCount} people.
+${diets.length?"DIETS TO COVER: "+diets.join(", "):""}
+MEMBERS:\n${memberProfiles||"Standard household"}
+PANTRY: ${pantry||"not specified"}
+SAVED RECIPES: ${myRecs||"none"}
+
+Return 3-5 suggestions. Valid JSON only, no markdown:
+{"recipes":[{"title":"","source":"","link":"","why":"","suits_sw":false,"suits_lc":false,"have":[],"buy":[],"is_standard":false}]}`;
+
+  try{
+    // FIX #1 reminder: replace URL with /api/claude proxy in production
+    var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:sysPrompt,messages:[{role:"user",content:`Suggest ${slot} options for ${day}. ${portionCount} eating.${diets.length?" Diets: "+diets.join(", "):""}`}]})});
+    var data=await res.json();
+    var raw=(data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
+    var parsed=JSON.parse(raw);
+    sd.suggestions=parsed.recipes||[];
+    sd.loaded=true;
+    sd.suggestions.forEach(s=>{if(stds.includes(s.title))s.is_standard=true;});
+  }catch(e){
+    sd.suggestions=[{title:"Could not reach Claude",why:"Check your API proxy configuration — see FIX #1 note in source code.",source:"",link:"",suits_sw:false,suits_lc:false,have:[],buy:[],is_standard:false}];
+    sd.loaded=true;
+  }
+  saveToStorage();renderPlannerDay();
+}
+
+// ═══ RECIPES ═══
+function handlePhotos(ev){[...ev.target.files].forEach(file=>{var reader=new FileReader();reader.onload=function(e){scanPages.push({dataUrl:e.target.result,file});renderThumbs();};reader.readAsDataURL(file);});ev.target.value="";}
+function renderThumbs(){
+  document.getElementById("photos-row").innerHTML=scanPages.map((p,i)=>`<div style="position:relative;width:64px;height:64px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--neutral-100);"><img src="${p.dataUrl}" style="width:100%;height:100%;object-fit:cover;"><button style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:9px;" onclick="removePage(${i})">×</button></div>`).join("");
+  document.getElementById("scan-status").innerHTML=scanPages.length?`<div style="margin-top:8px;"><button class="btn" onclick="runScan()" id="scan-btn">Scan ${scanPages.length} page${scanPages.length>1?"s":""} with Claude ↗</button></div>`:"";
+  if(!scanPages.length)document.getElementById("scan-preview").style.display="none";
+}
+function removePage(i){scanPages.splice(i,1);renderThumbs();}
+function gbadge(g){return g==="Slimming World"?"b-sw":g==="Low carb / HP"?"b-lc":g==="Treat Meal"?"b-treat":"b-gen";}
+async function runScan(){
+  var btn=document.getElementById("scan-btn");if(btn)btn.disabled=true;
+  var imgContent=scanPages.map(p=>({type:"image",source:{type:"base64",media_type:p.file.type||"image/jpeg",data:p.dataUrl.split(",")[1]}}));
+  imgContent.push({type:"text",text:`Analyse this cookbook recipe photo. Return JSON only (no markdown): {"title":"","serves":"","ingredients":[],"method":[],"category":"Slimming World|Low carb / HP|General Eating|Treat Meal","category_reason":"","sw_notes":"","lc_notes":""}. Rules: SW=Free Foods dominant,low fat. LC/HP=high lean protein,minimal starchy carbs. Treat=high fat/sugar/indulgent. Multiple pages = one recipe.`});
+  try{
+    var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:imgContent}]})});
+    var data=await res.json();
+    scanData=JSON.parse((data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim());
+    var d=scanData;
+    document.getElementById("scan-result-area").innerHTML=`<div style="font-size:12px;display:flex;flex-direction:column;gap:5px;"><div><strong>${esc(d.title||"Untitled")}</strong> <span class="badge ${gbadge(d.category)}">${esc(d.category)}</span></div>${d.category_reason?`<div style="color:var(--neutral-400);">${esc(d.category_reason)}</div>`:""}${d.ingredients&&d.ingredients.length?`<div><strong>Ingredients:</strong><br>${d.ingredients.map(i=>"• "+esc(i)).join("<br>")}</div>`:""}</div>`;
+    document.getElementById("scan-preview").style.display="block";
+  }catch(e){document.getElementById("scan-status").innerHTML='<div style="font-size:12px;color:var(--red-700);padding:8px;">Could not read recipe — check API configuration.</div>';}
+  if(btn)btn.disabled=false;
+}
+function confirmScan(){
+  if(!scanData)return;
+  ownRecipes.push({id:"r"+Date.now(),title:scanData.title||"Untitled",serves:scanData.serves||"4",notes:(scanData.ingredients||[]).join(", "),category:scanData.category||"General Eating",categoryReason:scanData.category_reason||"",swNotes:scanData.sw_notes||"",lcNotes:scanData.lc_notes||"",photoDataUrl:scanPages.length?scanPages[0].dataUrl:null,source:"cookbook",url:""});
+  scanPages=[];scanData=null;renderThumbs();document.getElementById("scan-preview").style.display="none";renderRecipeGroups();saveToStorage();
+}
+function cancelScan(){scanPages=[];scanData=null;renderThumbs();document.getElementById("scan-preview").style.display="none";}
+async function saveManualRecipe(){
+  var title=document.getElementById("mr-title").value.trim();if(!title)return;
+  var url=document.getElementById("mr-url").value.trim(),notes=document.getElementById("mr-notes").value.trim(),serves=getChipVal("mr-serves")||"4";
+  // FIX #3: use explicit ID
+  var btn=document.getElementById("save-manual-recipe-btn");btn.disabled=true;btn.textContent="Analysing…";
+  var category="General Eating",reason="",swN="",lcN="";
+  if(notes){try{var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:`Categorise this recipe. Return JSON only (no markdown): {"category":"Slimming World|Low carb / HP|General Eating|Treat Meal","reason":"one sentence","sw_notes":"","lc_notes":""}. SW=Free Foods dominant. LC/HP=high lean protein,low starchy carbs. Treat=high fat/sugar/indulgent.\nRecipe: ${title}\n${notes}`}]})});var d=await res.json();var p=JSON.parse((d.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim());category=p.category||"General Eating";reason=p.reason||"";swN=p.sw_notes||"";lcN=p.lc_notes||"";}catch(e){}}
+  ownRecipes.push({id:"r"+Date.now(),title,serves,notes,url,category,categoryReason:reason,swNotes:swN,lcNotes:lcN,photoDataUrl:null,source:"manual"});
+  document.getElementById("mr-title").value="";document.getElementById("mr-url").value="";document.getElementById("mr-notes").value="";
+  btn.disabled=false;btn.textContent="Save & auto-categorise ↗";renderRecipeGroups();saveToStorage();
+}
+function deleteRecipe(id){
+  if(!confirm("Delete this recipe? This cannot be undone."))return;
+  ownRecipes=ownRecipes.filter(r=>r.id!==id);renderRecipeGroups();saveToStorage();
+}
+function renderRecipeGroups(){
+  var el=document.getElementById("recipe-groups");if(!ownRecipes.length){el.innerHTML="";return;}
+  var groups={};GROUPS.forEach(g=>groups[g]=[]);
+  ownRecipes.forEach(r=>{var g=GROUPS.includes(r.category)?r.category:"General Eating";groups[g].push(r);});
+  el.innerHTML=GROUPS.map(g=>{
+    if(!groups[g].length)return"";
+    var bc={"Slimming World":"b-sw","Low carb / HP":"b-lc","General Eating":"b-gen","Treat Meal":"b-treat"}[g];
+    return`<div class="rec-group-hd"><span class="badge ${bc}">${esc(g)}</span><span>${groups[g].length} recipe${groups[g].length>1?"s":""}</span></div>`+
+    groups[g].map(r=>`<div class="own-rec-card">${r.photoDataUrl?`<img class="rec-photo" src="${r.photoDataUrl}">`:`<div class="rec-photo-ph">🍽</div>`}<div class="rec-body"><div class="rec-title">${esc(r.title)}</div><div class="rec-meta">Serves ${esc(r.serves)}${r.url?` · <a href="${esc(r.url)}" target="_blank" style="color:var(--teal-600);">link</a>`:""}<br>${esc((r.categoryReason||"").slice(0,80))}</div><div style="margin-top:5px;display:flex;gap:5px;"><button class="btn-sm btn-danger" onclick="deleteRecipe('${r.id}')">Delete</button></div></div></div>`).join("");
+  }).join("");
+}
+
+// ═══ SHOP ═══
+function clearShopList(){if(!confirm("Clear the entire shopping list?"))return;shopItems=[];saveToStorage();renderShop();}
+function addShopManual(){var inp=document.getElementById("shop-manual"),v=inp.value.trim();if(!v)return;shopItems.push({cat:"Other",name:v,done:false,manual:true});inp.value="";saveToStorage();renderShop();}
+function renderShop(){
+  var el=document.getElementById("shop-body");
+  if(!shopItems.length){el.innerHTML='<div class="empty">Items added when you choose a meal. Or add manually above.</div>';return;}
+  var cats={};shopItems.forEach((item,i)=>{if(!cats[item.cat])cats[item.cat]=[];cats[item.cat].push({...item,i});});
+  var html="";for(var[cat,items]of Object.entries(cats)){html+=`<div class="cat-hd">${esc(cat)}</div>`;items.forEach(item=>{html+=`<div class="list-item${item.done?" ticked":""}"><div class="chk${item.done?" done":""}" onclick="tickShop(${item.i})">${item.done?"✓":""}</div><span>${esc(item.name)}</span></div>`;});}
+  el.innerHTML=html;
+}
+function tickShop(i){shopItems[i].done=!shopItems[i].done;saveToStorage();renderShop();}
+
+// ═══ EXPORT ═══
+function buildMenuText(){
+  if(!members.length)return"No household set up.";
+  var days=getOrderedDays(),lines=["WEEKLY MEAL PLAN","Family Meal Planner · UK Household",formatDate(getWeekStartDate())+" – "+formatDate(getDayDate(6)),""];
+  var hasAnyChosen=false;
+  days.forEach(day=>{
+    var hasDay=weekPlan[day]&&Object.values(weekPlan[day]).some(sd=>sd.chosenMeal);
+    if(!hasDay)return;
+    hasAnyChosen=true;
+    lines.push("── "+day+" ──");
+    ALL_SLOTS.filter(s=>weekPlan[day]&&weekPlan[day][s]).forEach(slot=>{
+      var sd=weekPlan[day][slot];if(!sd||!sd.chosenMeal)return;
+      var eating=members.filter(m=>{var mSlots=getMemberSlotsForDay(m.id);if(!mSlots.includes(slot))return false;if(m.defaultMode==="Fasting")return false;var mode=sd.memberModes[m.id]||m.defaultMode;return mode!=="Fasting"&&mode!=="Skip";});
+      lines.push("  "+slot+": "+sd.chosenMeal.title+" (for "+eating.length+")");
+      if(sd.chosenMeal.link&&sd.chosenMeal.link!=="Own recipe")lines.push("    → "+sd.chosenMeal.link);
+    });
+    lines.push("");
+  });
+  return hasAnyChosen?lines.join("\n"):"No meals chosen yet — plan some meals in the Planner first.";
+}
+function renderExport(){
+  updateWkBadge();
+  var text=buildMenuText();var ep=document.getElementById("export-preview"),eb=document.getElementById("exp-btns"),note=document.getElementById("export-note");
+  if(!members.length){ep.innerHTML='<div class="empty">Set up household first.</div>';eb.style.display="none";note.style.display="none";return;}
+  ep.innerHTML='<div class="week-export">'+esc(text)+'</div>';
+  eb.style.display="flex";
+  // FIX #17: show note about omitted days
+  note.style.display="block";
+  window._menuText=text;
+}
+function copyMenu(){if(!window._menuText)return;navigator.clipboard.writeText(window._menuText).then(()=>alert("Copied to clipboard!")).catch(()=>{var t=document.createElement("textarea");t.value=window._menuText;document.body.appendChild(t);t.select();document.execCommand("copy");document.body.removeChild(t);alert("Copied!");});}
+function shareMsg(){if(window._menuText)window.open("sms:?&body="+encodeURIComponent(window._menuText));}
+function shareWA(){if(window._menuText)window.open("https://wa.me/?text="+encodeURIComponent(window._menuText));}
+
+// ═══ INIT ═══
+(function init(){
+  var loaded=loadFromStorage();
+  updateWkBadge();
+  renderMemberList();
+  renderRecipeGroups();
+  renderShop();
+  // Restore week-start chip UI
+  document.querySelectorAll("#week-start-chips .chip").forEach(c=>{c.classList.toggle("on",c.textContent.trim()===weekStart);});
+  // Restore global meal slot chips
+  document.querySelectorAll("#global-meal-slots .mst").forEach(c=>{c.classList.toggle("on",globalMealSlots.includes(c.textContent.trim()));});
+  var countEl=document.getElementById("global-slot-count");if(countEl)countEl.textContent=globalMealSlots.length+" of 5 selected";
+  if(loaded&&members.length){renderPlannerDay();}
+})();
+</script>
+</body>
+</html>
