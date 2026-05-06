@@ -9,8 +9,6 @@
 <meta name="apple-mobile-web-app-title" content="Meal Planner">
 <meta name="description" content="UK family meal planner — plan meals day by day, manage household preferences, and build your shopping list.">
 <link rel="manifest" href="manifest.json">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icons/icon-180.png">
 <title>Family Meal Planner</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -1015,7 +1013,7 @@ Return 3-5 suggestions. Valid JSON only, no markdown:
 
   try{
     // FIX #1 reminder: replace URL with /api/claude proxy in production
-    var res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:sysPrompt,messages:[{role:"user",content:`Suggest ${slot} options for ${day}. ${portionCount} eating.${diets.length?" Diets: "+diets.join(", "):""}`}]})});
+    var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:sysPrompt,messages:[{role:"user",content:`Suggest ${slot} options for ${day}. ${portionCount} eating.${diets.length?" Diets: "+diets.join(", "):""}`}]})});
     var data=await res.json();
     var raw=(data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
     var parsed=JSON.parse(raw);
@@ -1043,7 +1041,7 @@ async function runScan(){
   var imgContent=scanPages.map(p=>({type:"image",source:{type:"base64",media_type:p.file.type||"image/jpeg",data:p.dataUrl.split(",")[1]}}));
   imgContent.push({type:"text",text:`Analyse this cookbook recipe photo. Return JSON only (no markdown): {"title":"","serves":"","ingredients":[],"method":[],"category":"Slimming World|Low carb / HP|General Eating|Treat Meal","category_reason":"","sw_notes":"","lc_notes":""}. Rules: SW=Free Foods dominant,low fat. LC/HP=high lean protein,minimal starchy carbs. Treat=high fat/sugar/indulgent. Multiple pages = one recipe.`});
   try{
-    var res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:imgContent}]})});
+    var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:imgContent}]})});
     var data=await res.json();
     scanData=JSON.parse((data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim());
     var d=scanData;
@@ -1064,7 +1062,7 @@ async function saveManualRecipe(){
   // FIX #3: use explicit ID
   var btn=document.getElementById("save-manual-recipe-btn");btn.disabled=true;btn.textContent="Analysing…";
   var category="General Eating",reason="",swN="",lcN="";
-  if(notes){try{var res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:`Categorise this recipe. Return JSON only (no markdown): {"category":"Slimming World|Low carb / HP|General Eating|Treat Meal","reason":"one sentence","sw_notes":"","lc_notes":""}. SW=Free Foods dominant. LC/HP=high lean protein,low starchy carbs. Treat=high fat/sugar/indulgent.\nRecipe: ${title}\n${notes}`}]})});var d=await res.json();var p=JSON.parse((d.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim());category=p.category||"General Eating";reason=p.reason||"";swN=p.sw_notes||"";lcN=p.lc_notes||"";}catch(e){}}
+  if(notes){try{var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:`Categorise this recipe. Return JSON only (no markdown): {"category":"Slimming World|Low carb / HP|General Eating|Treat Meal","reason":"one sentence","sw_notes":"","lc_notes":""}. SW=Free Foods dominant. LC/HP=high lean protein,low starchy carbs. Treat=high fat/sugar/indulgent.\nRecipe: ${title}\n${notes}`}]})});var d=await res.json();var p=JSON.parse((d.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim());category=p.category||"General Eating";reason=p.reason||"";swN=p.sw_notes||"";lcN=p.lc_notes||"";}catch(e){}}
   ownRecipes.push({id:"r"+Date.now(),title,serves,notes,url,category,categoryReason:reason,swNotes:swN,lcNotes:lcN,photoDataUrl:null,source:"manual"});
   document.getElementById("mr-title").value="";document.getElementById("mr-url").value="";document.getElementById("mr-notes").value="";
   btn.disabled=false;btn.textContent="Save & auto-categorise ↗";renderRecipeGroups();saveToStorage();
