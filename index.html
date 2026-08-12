@@ -250,7 +250,7 @@ body.store .tabbar{display:none;}
     <div class="card">
       <div class="chips" id="md-allergies" style="margin-bottom:9px"></div>
       <div class="row tight">
-        <input type="text" id="allergy-in" placeholder="e.g. peanuts" autocomplete="off">
+        <input type="text" id="allergy-in" list="food-options" placeholder="e.g. peanuts" autocomplete="off">
         <button class="btn sm" style="flex:0 0 auto" onclick="addAllergy()">Add</button>
       </div>
     </div>
@@ -304,11 +304,12 @@ body.store .tabbar{display:none;}
     <div class="chip" onclick="setShopView('cupboard',this)">Store cupboard</div>
     <div class="chip" onclick="setShopView('layout',this)">Shop layout</div>
     <div class="chip" onclick="setShopView('prices',this)">Prices</div>
+    <div class="chip" onclick="setShopView('foods',this)">Foods</div>
   </div>
 
   <div id="shop-list-view">
     <div class="row tight" style="margin-bottom:7px">
-      <input type="text" id="shop-manual" placeholder="Add anything…" autocomplete="off"
+      <input type="text" id="shop-manual" list="food-options" placeholder="Add anything…" autocomplete="off"
              onkeydown="if(event.key==='Enter')addShopManual()">
       <button class="btn sm" style="flex:0 0 auto" onclick="addShopManual()">Add</button>
     </div>
@@ -327,7 +328,7 @@ body.store .tabbar{display:none;}
     <div class="hint" style="margin-bottom:11px">Staples you normally keep in. When a meal needs one,
       it arrives flagged so you can check the cupboard instead of buying another.</div>
     <div class="row tight" style="margin-bottom:11px">
-      <input type="text" id="cup-manual" placeholder="e.g. tinned tomatoes" autocomplete="off"
+      <input type="text" id="cup-manual" list="food-options" placeholder="e.g. tinned tomatoes" autocomplete="off"
              onkeydown="if(event.key==='Enter')addCupboard()">
       <button class="btn sm" style="flex:0 0 auto" onclick="addCupboard()">Add</button>
     </div>
@@ -363,6 +364,14 @@ body.store .tabbar{display:none;}
     <div class="sec-hd">Your regulars — how prices have moved</div>
     <div class="card flush" id="trend-body"></div>
     <button class="btn wide ghost sm" style="margin-top:11px" onclick="exportPrices()">Export price history as CSV</button>
+  </div>
+
+  <div id="shop-foods-view" hidden>
+    <div class="hint" style="margin-bottom:11px">Every food name the app has seen — from likes and dislikes,
+      recipes, your cupboard and your list. Renaming one here renames it everywhere.</div>
+    <input type="text" id="food-filter" placeholder="Search foods…" autocomplete="off"
+           oninput="renderFoods()" style="margin-bottom:11px">
+    <div class="card flush" id="foods-body"></div>
   </div>
 </div>
 
@@ -435,13 +444,14 @@ body.store .tabbar{display:none;}
   <div class="tab" data-v="settings" onclick="goTab('settings')"><span class="ti">⚙️</span>Settings</div>
 </div>
 
+<datalist id="food-options"></datalist>
 <div class="toast" id="toast"></div>
 <script>
 /* ═══════════════════════════════════════════════════════════
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.2";
+var VERSION = "2026.08.3";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -561,7 +571,7 @@ function blankState(){
     members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{},
     plan:{}, standards:{}, recipes:[], shop:[], cupboard:[],
     stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
-    prices:{}, spend:[], aliases:{},
+    prices:{}, spend:[], aliases:{}, foods:{},
     dayIdx:0, weekOffset:0, apiKey:"",
     theme:"pine", mode:"auto"
   };
@@ -931,6 +941,7 @@ function addIngredients(list, mealTitle){
       fromCupboard: !!staple, meals: [mealTitle], manual: false, extra: [],
       price: null, priceGuess: false
     };
+    learnFood(p.name, {use:"recipe"});
     S.shop.push(item); added.push(item.id);
   });
   return added;
@@ -950,7 +961,8 @@ function addShopManual(){
                aisle:resolveAisle(picked === "auto" ? guessAisle(p.name) : picked),
                status:"need", fromCupboard:false, meals:[], manual:true, extra:[],
                price:null, priceGuess:false});
-  inp.value = ""; save(); renderShop();
+  learnFood(p.name, {use:"shop", aisle:resolveAisle(picked === "auto" ? guessAisle(p.name) : picked)});
+  inp.value = ""; refreshFoodOptions(); save(); renderShop();
 }
 function cycleStatus(id){
   var it = S.shop.find(i => i.id === id); if(!it) return;
@@ -977,12 +989,14 @@ function setShopView(v, el){
   document.getElementById("shop-cupboard-view").hidden = (v !== "cupboard");
   document.getElementById("shop-layout-view").hidden = (v !== "layout");
   document.getElementById("shop-prices-view").hidden = (v !== "prices");
+  document.getElementById("shop-foods-view").hidden = (v !== "foods");
   renderShop();
 }
 function renderShop(){
   if(shopView === "cupboard"){ renderCupboard(); return; }
   if(shopView === "layout"){ renderLayout(); return; }
   if(shopView === "prices"){ renderPrices(); return; }
+  if(shopView === "foods"){ renderFoods(); return; }
   renderAislePicker();
   primePrices();
   var el = document.getElementById("shop-body");
@@ -1062,8 +1076,9 @@ function addCupboard(){
   v.split(",").map(x => x.trim()).filter(Boolean).forEach(name => {
     if(S.cupboard.some(c => normalise(c.name) === normalise(name))) return;
     S.cupboard.push({id:uid(), name:name, aisle:guessAisle(name)});
+    learnFood(name, {use:"cupboard"});
   });
-  inp.value = ""; save(); renderCupboard();
+  inp.value = ""; refreshFoodOptions(); save(); renderCupboard();
 }
 function delCupboard(id){ S.cupboard = S.cupboard.filter(c => c.id !== id); save(); renderCupboard(); }
 function seedCupboard(){
@@ -1239,7 +1254,8 @@ function confirmScan(){
     category:RECIPE_CATS.includes(scanResult.category) ? scanResult.category : "General eating",
     ingredients:scanResult.ingredients || [], method:scanResult.method || "",
     source:"Cookbook", link:""});
-  cancelScan(); save(); renderRecipes(); toast("Recipe saved");
+  (scanResult.ingredients || []).forEach(function(g){ learnFood(g.name || g, {use:"recipe"}); });
+  cancelScan(); refreshFoodOptions(); save(); renderRecipes(); toast("Recipe saved");
 }
 function cancelScan(){
   scanPages = []; scanResult = null;
@@ -1249,6 +1265,7 @@ function saveManualRecipe(){
   var t = document.getElementById("mr-title").value.trim();
   if(!t){ toast("Give the recipe a title"); return; }
   var ings = document.getElementById("mr-ings").value.split("\n").map(x => x.trim()).filter(Boolean).map(parseIngredient);
+  ings.forEach(function(g){ learnFood(g.name, {use:"recipe"}); });
   S.recipes.push({id:uid(), title:t,
     serves:parseInt(document.getElementById("mr-serves").value) || 4,
     category:document.getElementById("mr-cat").value,
@@ -1538,6 +1555,119 @@ function exportPrices(){
   toast((lines.length - 1) + " price records exported");
 }
 
+/* ═══ FOOD CATALOGUE ═══════════════════════════════════════
+   One shared vocabulary for the whole app. Every food name
+   typed anywhere — a like, a dislike, a recipe ingredient, a
+   cupboard staple, a list item — is registered here under its
+   normalised key. That key is the same one the shopping list
+   merges on and the price log stores against, so a food keeps
+   one identity from preference through to receipt.
+
+     S.foods[key] = {name, aisle, seen, uses:{…}}
+   ═════════════════════════════════════════════════════════ */
+/* "2 large onions, finely chopped" is the same food as "onion".
+   Strip the quantity and any trailing prep clause before filing it. */
+function cleanFoodName(raw){
+  var n = parseIngredient(String(raw || "")).name;
+  n = n.split(",")[0].trim();
+  n = n.replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  return n;
+}
+function learnFood(name, opts){
+  opts = opts || {};
+  var n = cleanFoodName(name);
+  if(!n) return null;
+  var key = normalise(n);
+  if(!key) return null;
+  var f = S.foods[key];
+  if(!f){
+    f = S.foods[key] = {name:n, aisle:opts.aisle || guessAisle(n), seen:0, uses:{}};
+  }
+  f.seen = (f.seen || 0) + 1;
+  if(opts.use) f.uses[opts.use] = true;
+  if(opts.aisle) f.aisle = opts.aisle;
+  /* Keep the tidiest spelling we've been given — shortest wins,
+     so "onions" beats "2 large onions, finely chopped". */
+  if(n.length < f.name.length) f.name = n;
+  return key;
+}
+function foodName(key){ return (S.foods[key] && S.foods[key].name) || key; }
+function foodsSorted(){
+  return Object.keys(S.foods)
+    .map(k => ({key:k, f:S.foods[k]}))
+    .sort((a,b) => a.f.name.toLowerCase().localeCompare(b.f.name.toLowerCase()));
+}
+/* Feeds every <input list="food-options"> in the app. */
+function refreshFoodOptions(){
+  var dl = document.getElementById("food-options");
+  if(!dl) return;
+  dl.innerHTML = foodsSorted().map(x => '<option value="' + esc(x.f.name) + '">').join("");
+}
+/* Existing data predates the catalogue, so build it from what's already there. */
+function seedCatalogue(){
+  S.members.forEach(m => {
+    (m.likes || []).forEach(p => learnFood(p.food, {use:"pref"}));
+    (m.dislikes || []).forEach(p => learnFood(p.food, {use:"pref"}));
+    (m.allergies || []).forEach(a => learnFood(a, {use:"allergy"}));
+  });
+  S.recipes.forEach(r => (r.ingredients || []).forEach(ing =>
+    learnFood(typeof ing === "object" ? ing.name : parseIngredient(ing).name, {use:"recipe"})));
+  S.cupboard.forEach(c => learnFood(c.name, {use:"cupboard", aisle:c.aisle}));
+  S.shop.forEach(i => learnFood(i.name, {use:"shop", aisle:i.aisle}));
+}
+function renderFoods(){
+  var q = (document.getElementById("food-filter").value || "").toLowerCase().trim();
+  var rows = foodsSorted().filter(x => !q || x.f.name.toLowerCase().includes(q));
+  var el = document.getElementById("foods-body");
+  if(!rows.length){
+    el.innerHTML = '<div class="empty">' + (q ? "Nothing matching." : "No foods yet — they appear as you use the app.") + '</div>';
+    return;
+  }
+  el.innerHTML = rows.map(x => {
+    var used = Object.keys(x.f.uses || {});
+    var lp = lastPrice(S.activeStore, x.key);
+    return '<div class="shop-row"><div class="grow"><div class="nm">' + esc(x.f.name) + '</div>'
+      + '<div class="mt">' + esc(aisleName(resolveAisle(x.f.aisle)))
+      + (used.length ? " · " + used.join(", ") : "")
+      + (lp ? " · " + money(lp.p) + " last" : "") + '</div></div>'
+      + '<button class="mini" onclick="renameFood(\'' + esc(x.key) + '\')">Rename</button>'
+      + '<button class="xdel" onclick="forgetFood(\'' + esc(x.key) + '\')" aria-label="Remove">×</button></div>';
+  }).join("");
+}
+/* Renaming propagates, so the vocabulary stays consistent everywhere. */
+function renameFood(key){
+  var f = S.foods[key]; if(!f) return;
+  var v = prompt("Call this food:", f.name);
+  if(v === null) return;
+  v = v.trim(); if(!v) return;
+  var old = f.name;
+  f.name = v;
+  S.members.forEach(m => {
+    (m.likes || []).forEach(p => { if(normalise(p.food) === key) p.food = v; });
+    (m.dislikes || []).forEach(p => { if(normalise(p.food) === key) p.food = v; });
+  });
+  S.cupboard.forEach(c => { if(normalise(c.name) === key) c.name = v; });
+  S.shop.forEach(i => { if(normalise(i.name) === key) i.name = v; });
+  S.recipes.forEach(r => (r.ingredients || []).forEach(ing => {
+    if(typeof ing === "object" && normalise(ing.name) === key) ing.name = v;
+  }));
+  /* If the new spelling normalises differently, move the entry across. */
+  var nk = normalise(v);
+  if(nk && nk !== key){
+    S.foods[nk] = f; delete S.foods[key];
+    if(S.prices[S.activeStore] && S.prices[S.activeStore][key]){
+      S.prices[S.activeStore][nk] = S.prices[S.activeStore][key];
+      delete S.prices[S.activeStore][key];
+    }
+  }
+  save(); refreshFoodOptions(); renderFoods();
+  toast(old + " → " + v);
+}
+function forgetFood(key){
+  if(!confirm("Remove " + foodName(key) + " from the food list?\nAnything already using it is untouched.")) return;
+  delete S.foods[key]; save(); refreshFoodOptions(); renderFoods();
+}
+
 </script>
 <script>
 /* ═══ HOUSEHOLD ════════════════════════════════════════════ */
@@ -1625,8 +1755,9 @@ function addAllergy(){
   if(!m || !v) return;
   v.split(",").map(x => x.trim()).filter(Boolean).forEach(a => {
     if(!m.allergies.includes(a)) m.allergies.push(a);
+    learnFood(a, {use:"allergy"});
   });
-  inp.value = ""; save(); renderAllergies();
+  inp.value = ""; refreshFoodOptions(); save(); renderAllergies();
 }
 function delAllergy(a){
   var m = me(); if(!m) return;
@@ -1645,7 +1776,13 @@ function openPref(type){
   var el = document.getElementById(type + "-form");
   el.innerHTML = '<div class="card" id="' + type + '-inner">'
     + '<label class="fld">Food</label>'
-    + '<input type="text" id="' + type + '-food" placeholder="e.g. mushrooms" autocomplete="off">'
+    + '<input type="text" id="' + type + '-food" list="food-options" placeholder="e.g. mushrooms" autocomplete="off">'
+    + '<label class="fld">Applies to</label>'
+    + '<div class="chips" id="' + type + '-who">'
+    + S.members.map(function(m){
+        return '<div class="chip' + (m.id === currentMember ? " on" : "") + '" data-mid="' + m.id + '"'
+             + ' onclick="this.classList.toggle(\'on\')">' + esc(m.name) + '</div>'; }).join("")
+    + '</div>'
     + '<label class="fld">When? <span style="font-weight:400;color:var(--n-400)">Leave blank for always</span></label>'
     + '<div class="chip" style="margin-bottom:4px" onclick="toggleAllCtx(\'' + type + '\')">Select all</div>'
     + CTX_SECTIONS.map(s => '<div class="ctx-sec"><h4>' + esc(s.title) + '</h4>'
@@ -1674,8 +1811,20 @@ function savePref(type){
   var contexts = [...document.querySelectorAll("#" + type + "-inner .ctx-row")]
     .filter(r => r.querySelector(".ctx-cb").classList.contains("on")).map(r => r.dataset.id);
   var note = document.getElementById(type + "-note").value.trim();
-  (type === "like" ? m.likes : m.dislikes).push({id:uid(), food:food, contexts:contexts, note:note});
-  closePref(type); save(); renderPrefs(type);
+  var who = [...document.querySelectorAll("#" + type + "-who .chip.on")].map(c => c.dataset.mid);
+  if(!who.length) who = [m.id];
+  var key = normalise(food);
+  var n = 0;
+  who.forEach(function(mid){
+    var p = S.members.find(x => x.id === mid); if(!p) return;
+    var arr = type === "like" ? p.likes : p.dislikes;
+    if(arr.some(x => normalise(x.food) === key)) return;   // already recorded for them
+    arr.push({id:uid(), food:food, contexts:contexts.slice(), note:note});
+    n++;
+  });
+  learnFood(food, {use:"pref"});
+  closePref(type); refreshFoodOptions(); save(); renderPrefs(type);
+  if(who.length > 1) toast("Added for " + n + " of " + who.length + " selected");
 }
 function delPref(type, pid){
   var m = me(); if(!m) return;
@@ -1853,6 +2002,8 @@ function wipeAll(){
   try{
     load();
     applyTheme();
+    if(!S.foods || !Object.keys(S.foods).length) seedCatalogue();
+    refreshFoodOptions();
     if(window.matchMedia){
       var mq = window.matchMedia("(prefers-color-scheme: dark)");
       var onScheme = function(){ if(S.mode === "auto") applyTheme(); };
