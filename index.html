@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Meal Planner</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meals">
+<meta name="theme-color" content="#14503F" id="tc">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAGIklEQVR4nO2dPY4bORBG6cUGvonP4RsYcOhjOHDgeIIJ5hgTzoHmNhs00BB69VFs/vVX1HuRjZHIEvm6WGwJzS9ff3xPAPf45+oAwBfkAAlygAQ5QIIcIEEOkCAHSJADJMgBEuQACXKABDlAghwgQQ6QIAdIkAMkyAES5AAJcoAEOUCCHCBBDpAgB0iQAyTIARLkAAlygAQ5QIIcIEEOkCAHSJADJMgBEuQACXKABDlAghwgQQ6QIAdI/h3a+uf7x/7vb79+Du3rqZgzsAMzx+0H+P9/oZppAztKjrsR40c7Mwd2iByZWPGjhckDS0EKEuQAydjdijPlefhp91lPJEf1qnx44/O4sr4c3Su1vcHlLVlWjgnbouUtWVCO+bvlrcf1FFlKjmtvoqynyCJy+NxbW0mRFe5z+JixYxhSBbEzR+MclFzfjRvg0CkksBwV01YxVYe3nO308/0jrh9R5Tg1SR2nZ2+qPIC4foSsOU7d+R40MadaDlqCBMscbl+IbL2URBWxBImUOQrNGJct2nuMlULCyFEyrPO1qOg9kB8x5Cg0Y0IkD1nJjxhyPMTEjA2rYFoIIEf+Ort2KVE8jCpE8nDfrTw0o7H9P39/Z/76+vLW0vi3Xz/zPwk21PoWazkGmZEXQr2yTpTQfvjK0d2Mcifybz9rSVw/fOXIcHY0G7W429opRfJ+2GJakHYcyr5mjGjW1pt4maM8bZTMXz4B5Fs4lUIiJo8vX398795oY7mQeXsvM87WDb1aa/xoo/duB+wyR5fLS81l9dZ0f+Pdlv/8/d246U2WlalpzXGXwrHrbkZJI4UliNv05/GSo31BuTtJry9vXczIt9buh1tR4iVHI8qMEX21+BGFGHKUpI2ZZmQaL/EjyuJiJEdLUp1vRqaLlvxhtbIYyaGou84mmNHSUYjk4SJH37QxzQzV3RrJw0WOjkw248JOR+Mux8P0a7tBeBiY/8riLsdZLryC10seFnJUr7K2aWOjOjyTssNCDsXZxHv5tVvxO6BBkXTBWo485mljI0SQisByHLg8bWyYhNGFdeSA7lwvhyq+zNfjXqiP6VCTXi9HHYHW8kChHogqxwGrld4qmBYWkQNGgBwgQQ6QIAdIkAMkyAES5AAJcoBkETms7kJaBdNCVDkC3YUMFOqB6+Vw/uZpAs7fO14vB9iyjhwmK71JGF0ILEeItTxEkAprOc6WHZdftWcDMK+rLOSoLr7Mr8vq8Byq0WQiR0cuTB6X563uuMvxMPHaJo+HgZmvKclfjgouuYLXSxvJR46WVbbvExAq6PsMCJOCI/nIkaEu/U7zo64j/zUlWcnRN3mkKX50f9yUT9pIVnJkKLnO5vtRbUaItJGiyFHITD+uekTdTLzkaH+Aq/KjoyKqtUIzujzZfQ5ecuRp8SN1SiGNz86OsqBs2D0Yv8vRE68vb+oJ9vsLTjU49Ci4Dbe0kTyP1Mi34HPeSkkLt7R/qGc/UuMh5UdPbNNWcqBOHacSRqwFZcO05uh4Ecx8MH4dhgvKRrzMkc6fW1OSQs62doqIaSM5y9H9xM38aUvlbz/L5EKhI75ypGEnst5O8+htSFwzkrkcafyJvUPvaYY2I9kWpLfkB/Hz/cNwRX8Ylb8ZKYQcJVj5YRVMCzHkaD9zdRolYYRIGymKHKnYjwsVKew9ihkpkBzpzD3myYqU9xjIjOS/WzmwDW7JTGyvGT0Z5RbG0mIjUubYKR/ocVnkVMsRzUjhMsfOqW/291e2T1KFakHNSHHlSFW//Di8fsImKK4ZKbQc6UwJcpehdWtoLTZC1hwHDKfBMKQKYmeOncYU0j2SNVhEjo1rFVlJi42l5NiYr8h6WmwsKMfGPmHjLFnViZ1l5djpbsnyTuysL8fOYVKXv7/ZzhPJceBpp7ycFe5zwCCQAyTIAZIhcmSWc1b6FiYP7KjMcTdWzGhn5sAOXFYOEWNGL6YN7JBHMMAaUJCCBDlAghwgQQ6QIAdIkAMkyAES5AAJcoAEOUCCHCBBDpAgB0iQAyTIARLkAAlygAQ5QIIcIEEOkCAHSJADJMgBEuQACXKABDlAghwgQQ6QIAdIkAMkyAGS/wCbMZ4tookXRQAAAABJRU5ErkJggg==">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#F1F4F1;--card:#FFFFFF;--ink:#12211B;--muted:#566B60;--line:#DDE5E0;
+  --accent:#14503F;--accent-ink:#E6F3EE;--accent-soft:#DCEBE4;
+  --ok:#DCEBDC;--ok-ink:#2C5A2C;--warn:#F6E9D2;--warn-ink:#6B4712;--danger:#A83232;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+  --sh:0 1px 3px rgba(0,0,0,.07);--sh-lg:0 6px 20px rgba(0,0,0,.16);
+}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45;
+  display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);
+  transition:background .18s,color .18s;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+.topbar{background:var(--accent);color:var(--accent-ink);padding:11px 16px 10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;}
+.topbar h1{font-size:16px;font-weight:600;letter-spacing:-.2px;}
+.topbar .sub{font-size:10.5px;opacity:.62;margin-top:1px;}
+.wk-badge{font-size:11px;background:rgba(255,255,255,.16);padding:4px 10px;border-radius:20px;
+  font-weight:500;white-space:nowrap;}
+
+.view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 24px;}
+.view[hidden]{display:none;}
+
+.tabbar{display:flex;background:var(--card);border-top:1px solid var(--line);flex-shrink:0;
+  padding-bottom:env(safe-area-inset-bottom);}
+.tab{flex:1;padding:8px 2px 6px;text-align:center;font-size:10px;font-weight:500;
+  color:var(--muted);cursor:pointer;border-top:2px solid transparent;margin-top:-1px;user-select:none;}
+.tab .ti{display:block;font-size:19px;line-height:1.25;margin-bottom:1px;opacity:.45;}
+.tab.active{color:var(--accent);border-top-color:var(--accent);}
+.tab.active .ti{opacity:1;}
+body.dark .tab.active{color:var(--ink);border-top-color:var(--ink);}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:13px;margin-bottom:11px;box-shadow:var(--sh);}
+.card.flush{padding:0;overflow:hidden;}
+.sec-hd{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin:18px 0 8px;}
+.sec-hd:first-child{margin-top:0;}
+h2{font-size:17px;font-weight:600;letter-spacing:-.2px;margin-bottom:3px;}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.4;}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px;line-height:1.5;opacity:.8;}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--accent);color:var(--accent-ink);border:none;border-radius:var(--r-sm);
+  padding:10px 15px;font-size:14px;font-weight:500;cursor:pointer;}
+.btn:active{filter:brightness(.9);}
+.btn:disabled{opacity:.5;}
+.btn.wide{width:100%;}
+.btn.ghost{background:var(--card);color:var(--accent);border:1px solid var(--line);}
+body.dark .btn.ghost{color:var(--ink);}
+.btn.sm{padding:7px 11px;font-size:12.5px;}
+.btn.danger{background:var(--card);color:var(--danger);border:1px solid var(--line);}
+.btn:focus-visible,.chip:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);color:var(--ink);font-size:15px;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+label.fld{display:block;font-size:12px;font-weight:500;color:var(--muted);margin:11px 0 5px;}
+label.fld:first-child{margin-top:0;}
+.row{display:flex;gap:8px;}
+.row>*{flex:1;}
+.row.tight{gap:6px;}
+
+.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:20px;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:12.5px;
+  cursor:pointer;user-select:none;white-space:nowrap;}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.sw{width:30px;height:30px;border-radius:50%;padding:0;border:2px solid var(--line);flex-shrink:0;cursor:pointer;}
+.sw.on{border-color:var(--ink);border-width:3px;}
+
+.badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:600;
+  background:var(--accent-soft);color:var(--accent);}
+body.dark .badge{color:var(--ink);}
+.badge.sig-ok{background:var(--ok);color:var(--ok-ink);}
+
+.avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:600;color:#fff;flex-shrink:0;}
+
+.list-item{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);}
+.list-item:last-child{border-bottom:none;}
+.list-item .grow,.shop-row .grow{flex:1;min-width:0;}
+.list-item .nm,.shop-row .nm{font-size:14.5px;}
+.list-item .mt,.shop-row .mt{font-size:11.5px;color:var(--muted);margin-top:1px;}
+.chev{color:var(--muted);opacity:.5;font-size:17px;}
+
+.chk{width:24px;height:24px;border-radius:7px;border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--accent-ink);
+  flex-shrink:0;cursor:pointer;background:var(--card);}
+.chk.done{background:var(--accent);border-color:var(--accent);}
+
+.backlink{display:inline-flex;align-items:center;gap:4px;color:var(--accent);
+  font-size:13.5px;font-weight:500;margin-bottom:12px;cursor:pointer;}
+body.dark .backlink{color:var(--ink);}
+
+.daybar{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:8px 10px;margin-bottom:12px;box-shadow:var(--sh);}
+.daybar .nav{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);
+  background:var(--card);font-size:16px;color:var(--ink);cursor:pointer;flex-shrink:0;}
+.daybar .lbl{text-align:center;flex:1;}
+.daybar .lbl b{display:block;font-size:15px;font-weight:600;}
+.daybar .lbl span{font-size:11.5px;color:var(--muted);}
+
+.slot{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  margin-bottom:10px;overflow:hidden;box-shadow:var(--sh);}
+.slot-hd{display:flex;align-items:center;gap:9px;padding:12px 13px;cursor:pointer;}
+.slot-hd .ttl{flex:1;min-width:0;}
+.slot-hd .ttl b{font-size:14.5px;font-weight:600;}
+.slot-hd .ttl div{font-size:11.5px;color:var(--muted);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.slot-body{padding:0 13px 13px;border-top:1px solid var(--line);}
+.mode-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);}
+.mode-row:last-child{border-bottom:none;}
+.mode-row .who{flex:1;font-size:13.5px;min-width:0;}
+.mode-sel{width:auto;flex:0 0 auto;padding:5px 7px;font-size:12px;border-radius:6px;}
+
+.sug{border:1px solid var(--line);border-radius:var(--r-sm);padding:11px;margin-top:8px;cursor:pointer;}
+.sug.picked{border-color:var(--accent);background:var(--accent-soft);}
+.sug .st{font-size:14px;font-weight:600;line-height:1.3;}
+.sug .sy{font-size:12.5px;color:var(--muted);margin-top:3px;}
+.sug .ss{font-size:11.5px;color:var(--muted);opacity:.85;margin-top:5px;}
+.pulse{animation:p 1.1s ease-in-out infinite;}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.45}}
+
+.aisle-hd{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--accent);background:var(--accent-soft);padding:6px 13px;}
+body.dark .aisle-hd{color:var(--ink);}
+.shop-row{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid var(--line);}
+.shop-row:last-child{border-bottom:none;}
+.shop-row.bought .nm{text-decoration:line-through;color:var(--muted);}
+.shop-row.have{background:var(--ok);}
+.shop-row .qty{font-size:11.5px;color:var(--muted);}
+.cupboard-flag{font-size:10.5px;font-weight:600;color:var(--warn-ink);background:var(--warn);
+  padding:2px 6px;border-radius:5px;white-space:nowrap;}
+.mini{background:none;border:none;font-size:11.5px;font-weight:600;color:var(--accent);
+  cursor:pointer;padding:4px 6px;white-space:nowrap;}
+body.dark .mini{color:var(--ink);}
+.mini.mut{color:var(--muted);}
+.xdel{background:none;border:none;color:var(--muted);opacity:.55;font-size:19px;
+  cursor:pointer;padding:0 2px;line-height:1;}
+.ord{background:var(--card);border:1px solid var(--line);border-radius:6px;
+  width:28px;height:28px;font-size:13px;color:var(--ink);cursor:pointer;flex-shrink:0;}
+.ord:disabled{opacity:.25;}
+
+body.store .topbar{filter:brightness(.85);}
+body.store .shop-row{padding:15px 13px;}
+body.store .shop-row .nm{font-size:16px;}
+body.store .chk{width:30px;height:30px;font-size:16px;}
+body.store .shop-row.bought{display:none;}
+body.store .tabbar{display:none;}
+.storebar{display:flex;align-items:center;gap:10px;background:var(--accent);color:var(--accent-ink);
+  padding:9px 14px;font-size:13px;flex-shrink:0;filter:brightness(.85);}
+.storebar .grow{flex:1;}
+.storebar button{background:rgba(255,255,255,.2);color:var(--accent-ink);border:none;
+  padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;}
+
+.ctx-sec{margin-top:12px;}
+.ctx-sec h4{font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:5px;}
+.ctx-row{display:flex;gap:9px;align-items:flex-start;padding:7px 0;cursor:pointer;}
+.ctx-cb{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--line);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:12px;
+  color:var(--accent-ink);background:var(--card);margin-top:1px;}
+.ctx-cb.on{background:var(--accent);border-color:var(--accent);}
+.ctx-row .cl{font-size:13.5px;}
+.ctx-row .cd{font-size:11.5px;color:var(--muted);line-height:1.35;}
+
+.toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--ink);
+  color:var(--bg);padding:10px 16px;border-radius:22px;font-size:13px;z-index:99;
+  box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:opacity .2s;
+  max-width:88%;text-align:center;}
+.toast.show{opacity:.96;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div><h1 id="top-title">Meal Planner</h1><div class="sub" id="top-sub">Plan the week</div></div>
+  <div class="wk-badge" id="wk-badge">—</div>
+</div>
+
+<div class="storebar" id="storebar" hidden>
+  <span class="grow" id="store-count">—</span>
+  <button onclick="exitStore()">Done</button>
+</div>
+
+<!-- ══ PLAN ══ -->
+<div class="view" id="v-plan">
+  <div id="plan-setup" class="empty" hidden></div>
+  <div id="plan-main" hidden>
+    <div class="daybar">
+      <button class="nav" onclick="changeDay(-1)" aria-label="Previous day">‹</button>
+      <div class="lbl"><b id="day-name">—</b><span id="day-date"></span></div>
+      <button class="nav" onclick="changeDay(1)" aria-label="Next day">›</button>
+    </div>
+    <div id="slots"></div>
+  </div>
+</div>
+
+<!-- ══ HOUSEHOLD ══ -->
+<div class="view" id="v-house" hidden>
+  <div id="house-list">
+    <div class="card flush" id="member-list"></div>
+    <button class="btn wide ghost" onclick="openAddMember()" style="margin-bottom:11px">+ Add someone</button>
+    <div id="add-member" class="card" hidden>
+      <label class="fld">Name</label>
+      <input type="text" id="nm-name" placeholder="e.g. Sam" autocomplete="off">
+      <label class="fld">Usual eating mode</label>
+      <div class="chips" id="nm-diet"></div>
+      <div class="row" style="margin-top:13px">
+        <button class="btn ghost" onclick="closeAddMember()">Cancel</button>
+        <button class="btn" onclick="saveMember()">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="house-detail" hidden>
+    <div class="backlink" onclick="showHouseList()">‹ Household</div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div class="avatar" id="md-avatar"></div>
+        <div class="grow"><h2 id="md-name">—</h2><div class="hint" id="md-mode"></div></div>
+      </div>
+      <label class="fld">Usual eating mode</label>
+      <div class="chips" id="md-diet"></div>
+    </div>
+    <div class="sec-hd">Meals they eat</div>
+    <div class="card"><div class="chips" id="md-slots"></div>
+      <div class="hint" style="margin-top:8px">Leave all off to use the household default.</div></div>
+    <div class="sec-hd">Allergies — always excluded</div>
+    <div class="card">
+      <div class="chips" id="md-allergies" style="margin-bottom:9px"></div>
+      <div class="row tight">
+        <input type="text" id="allergy-in" placeholder="e.g. peanuts" autocomplete="off">
+        <button class="btn sm" style="flex:0 0 auto" onclick="addAllergy()">Add</button>
+      </div>
+    </div>
+    <div class="sec-hd">Likes</div>
+    <div class="card flush" id="likes-list"></div>
+    <button class="btn wide ghost sm" onclick="openPref('like')" style="margin-bottom:11px">+ Add a like</button>
+    <div id="like-form"></div>
+    <div class="sec-hd">Dislikes</div>
+    <div class="card flush" id="dislikes-list"></div>
+    <button class="btn wide ghost sm" onclick="openPref('dislike')" style="margin-bottom:11px">+ Add a dislike</button>
+    <div id="dislike-form"></div>
+    <button class="btn wide danger" onclick="deleteMember()" style="margin-top:16px">Remove from household</button>
+  </div>
+</div>
+
+<!-- ══ RECIPES ══ -->
+<div class="view" id="v-recipes" hidden>
+  <div class="sec-hd">Scan from a cookbook</div>
+  <div class="card">
+    <div class="hint">Photograph the pages. Claude reads the title, ingredients and method into your saved recipes.</div>
+    <input type="file" id="scan-in" accept="image/*" multiple hidden onchange="handlePhotos(event)">
+    <div id="thumbs" style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 0"></div>
+    <div class="row" style="margin-top:11px">
+      <button class="btn ghost sm" onclick="document.getElementById('scan-in').click()">Add photos</button>
+      <button class="btn sm" id="scan-btn" onclick="runScan()" disabled>Read pages</button>
+    </div>
+    <div id="scan-out"></div>
+  </div>
+  <div class="sec-hd">Add one yourself</div>
+  <div class="card">
+    <label class="fld">Title</label>
+    <input type="text" id="mr-title" placeholder="e.g. Mum's chilli" autocomplete="off">
+    <div class="row">
+      <div><label class="fld">Serves</label><input type="number" id="mr-serves" value="4" min="1"></div>
+      <div><label class="fld">Category</label><select id="mr-cat"></select></div>
+    </div>
+    <label class="fld">Ingredients — one per line</label>
+    <textarea id="mr-ings" rows="4" placeholder="500g beef mince&#10;2 onions&#10;1 tin chopped tomatoes"></textarea>
+    <label class="fld">Link or source <span style="font-weight:400;opacity:.6">(optional)</span></label>
+    <input type="text" id="mr-src" placeholder="bbcgoodfood.com/…" autocomplete="off">
+    <button class="btn wide" style="margin-top:13px" onclick="saveManualRecipe()">Save recipe</button>
+  </div>
+  <div class="sec-hd">Saved recipes</div>
+  <div id="recipe-groups"></div>
+</div>
+
+<!-- ══ SHOP ══ -->
+<div class="view" id="v-shop" hidden>
+  <div id="shop-tabs" class="chips" style="margin-bottom:12px">
+    <div class="chip on" onclick="setShopView('list',this)">List</div>
+    <div class="chip" onclick="setShopView('cupboard',this)">Store cupboard</div>
+    <div class="chip" onclick="setShopView('layout',this)">Shop layout</div>
+    <div class="chip" onclick="setShopView('prices',this)">Prices</div>
+  </div>
+
+  <div id="shop-list-view">
+    <div class="row tight" style="margin-bottom:7px">
+      <input type="text" id="shop-manual" placeholder="Add anything…" autocomplete="off"
+             onkeydown="if(event.key==='Enter')addShopManual()">
+      <button class="btn sm" style="flex:0 0 auto" onclick="addShopManual()">Add</button>
+    </div>
+    <select id="shop-manual-aisle" style="margin-bottom:12px"></select>
+    <div id="shop-summary"></div>
+    <div class="card flush" id="shop-body"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost sm" onclick="clearBought()">Clear bought</button>
+      <button class="btn sm" onclick="enterStore()">Start shopping</button>
+    </div>
+    <button class="btn wide ghost sm" style="margin-top:8px" onclick="finishShop()">Finish shop — save the total</button>
+    <button class="btn wide ghost sm" style="margin-top:8px" onclick="copyShopList()">Copy list as text</button>
+  </div>
+
+  <div id="shop-cupboard-view" hidden>
+    <div class="hint" style="margin-bottom:11px">Staples you normally keep in. When a meal needs one,
+      it arrives flagged so you can check the cupboard instead of buying another.</div>
+    <div class="row tight" style="margin-bottom:11px">
+      <input type="text" id="cup-manual" placeholder="e.g. tinned tomatoes" autocomplete="off"
+             onkeydown="if(event.key==='Enter')addCupboard()">
+      <button class="btn sm" style="flex:0 0 auto" onclick="addCupboard()">Add</button>
+    </div>
+    <div class="card flush" id="cupboard-body"></div>
+    <button class="btn wide ghost sm" style="margin-top:11px" onclick="seedCupboard()">Add common UK staples</button>
+  </div>
+
+  <div id="shop-layout-view" hidden>
+    <div class="sec-hd">Which shop</div>
+    <div class="chips" id="store-chips" style="margin-bottom:9px"></div>
+    <div class="row tight">
+      <input type="text" id="store-new" placeholder="Add a shop — e.g. Morrisons" autocomplete="off"
+             onkeydown="if(event.key==='Enter')addStore()">
+      <button class="btn sm" style="flex:0 0 auto" onclick="addStore()">Add</button>
+    </div>
+    <div class="sec-hd">Aisle order</div>
+    <div class="hint" style="margin-bottom:9px">Put these in the order you walk round.
+      Your list sorts to match, and each shop keeps its own order.</div>
+    <div class="card flush" id="layout-body"></div>
+    <div class="row tight" style="margin-top:11px">
+      <input type="text" id="aisle-new" placeholder="Add an aisle — e.g. Garden centre" autocomplete="off"
+             onkeydown="if(event.key==='Enter')addAisle()">
+      <button class="btn sm" style="flex:0 0 auto" onclick="addAisle()">Add</button>
+    </div>
+    <button class="btn wide danger sm" style="margin-top:14px" onclick="delStore()">Remove this shop</button>
+  </div>
+
+  <div id="shop-prices-view" hidden>
+    <div class="hint" style="margin-bottom:11px">Prices you record are stamped with the shop and the date,
+      so the history builds itself from your first shop onwards.</div>
+    <div class="sec-hd">What you've spent</div>
+    <div class="card flush" id="spend-body"></div>
+    <div class="sec-hd">Your regulars — how prices have moved</div>
+    <div class="card flush" id="trend-body"></div>
+    <button class="btn wide ghost sm" style="margin-top:11px" onclick="exportPrices()">Export price history as CSV</button>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══ -->
+<div class="view" id="v-settings" hidden>
+  <div class="sec-hd">Appearance</div>
+  <div class="card">
+    <div class="chips" id="theme-chips"></div>
+    <div class="hint" id="theme-name" style="margin-top:8px"></div>
+    <div class="chips" id="mode-chips" style="margin-top:10px"></div>
+  </div>
+
+  <div class="sec-hd">Week</div>
+  <div class="card">
+    <label class="fld">Week starts on</label>
+    <select id="set-weekstart" onchange="applySettings()"></select>
+  </div>
+
+  <div class="sec-hd">Meals the household plans</div>
+  <div class="card">
+    <div class="chips" id="set-slots"></div>
+    <div class="hint" style="margin-top:9px">Up to five. Individuals can override this on their own page.</div>
+  </div>
+
+  <div class="sec-hd">Claude API key</div>
+  <div class="card">
+    <div class="hint">Needed for recipe suggestions and cookbook scanning. Stored on this phone only —
+      never uploaded, never in the published code. Get one at console.anthropic.com.</div>
+    <label class="fld">Key</label>
+    <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+    <div class="row" style="margin-top:11px">
+      <button class="btn ghost sm" onclick="clearKey()">Remove</button>
+      <button class="btn sm" onclick="saveKey()">Save key</button>
+    </div>
+    <div class="hint" id="key-state" style="margin-top:9px"></div>
+  </div>
+
+  <div class="sec-hd">This week's menu</div>
+  <div class="card">
+    <div class="hint">Plain text — for sharing or sticking on the fridge.</div>
+    <div class="row" style="margin-top:11px">
+      <button class="btn ghost sm" onclick="copyMenu()">Copy</button>
+      <button class="btn ghost sm" onclick="shareMenu()">Message</button>
+    </div>
+  </div>
+
+  <div class="sec-hd">Backup</div>
+  <div class="card">
+    <div class="hint">Everything lives on this phone. Take a copy before clearing Safari data or changing handset.</div>
+    <div class="row" style="margin-top:11px">
+      <button class="btn ghost sm" onclick="exportData()">Export</button>
+      <button class="btn ghost sm" onclick="document.getElementById('import-in').click()">Import</button>
+    </div>
+    <input type="file" id="import-in" accept=".json" hidden onchange="importData(event)">
+  </div>
+
+  <div class="sec-hd">Start again</div>
+  <div class="card">
+    <button class="btn wide danger" onclick="wipeWeek()">Clear this week's plan</button>
+    <button class="btn wide danger" style="margin-top:8px" onclick="wipeAll()">Erase everything</button>
+  </div>
+  <div class="hint" style="text-align:center;margin-top:16px;opacity:.55" id="ver"></div>
+</div>
+
+<div class="tabbar">
+  <div class="tab active" data-v="plan" onclick="goTab('plan')"><span class="ti">📅</span>Plan</div>
+  <div class="tab" data-v="house" onclick="goTab('house')"><span class="ti">🏠</span>Household</div>
+  <div class="tab" data-v="recipes" onclick="goTab('recipes')"><span class="ti">📖</span>Recipes</div>
+  <div class="tab" data-v="shop" onclick="goTab('shop')"><span class="ti">🛒</span>Shop</div>
+  <div class="tab" data-v="settings" onclick="goTab('settings')"><span class="ti">⚙️</span>Settings</div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Family Meal Planner — rebuild
+   Single file. Data in localStorage. API key entered by user.
+   ═══════════════════════════════════════════════════════════ */
+var VERSION = "2026.08.2";
+var STORE_KEY = "fmp2";
+var MODEL = "claude-sonnet-4-6";
+
+/* ── reference data ───────────────────────────────────────── */
+var DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+var ALL_SLOTS = ["Breakfast","Brunch","Lunch","Dinner","Tea","Supper","Snack"];
+var MODES = ["Standard","Slimming World","Low carb / HP","Fasting","Making own","Skip"];
+var RECIPE_CATS = ["Slimming World","Low carb / HP","General eating","Treat meal"];
+var AVATAR_COLOURS = ["#0F6E56","#3C3489","#A32D2D","#633806","#042C53","#712B13"];
+
+/* Aisles are identified by a stable id so they can be renamed, reordered
+   and deleted per shop without breaking items already on the list. */
+var AISLE_CATALOGUE = [
+  {id:"produce",  name:"Fruit & veg"},
+  {id:"meat",     name:"Meat & fish"},
+  {id:"chilled",  name:"Chilled & dairy"},
+  {id:"bakery",   name:"Bakery"},
+  {id:"tins",     name:"Tins & jars"},
+  {id:"dry",      name:"Dry goods"},
+  {id:"spices",   name:"Herbs & spices"},
+  {id:"frozen",   name:"Frozen"},
+  {id:"drinks",   name:"Drinks"},
+  {id:"household",name:"Household"},
+  {id:"middle",   name:"Middle aisle"},
+  {id:"other",    name:"Other"}
+];
+function defaultAisles(){ return AISLE_CATALOGUE.map(a => ({id:a.id, name:a.name})); }
+
+/* ── themes ──────────────────────────────────────────────── */
+var THEMES = {
+  graphite:{label:"Graphite",
+    light:{bg:"#F1F2F4",card:"#FFFFFF",ink:"#151E28",muted:"#5A6672",line:"#E1E5E9",
+           accent:"#22344A",accentInk:"#F3F6F9",accentSoft:"#E5EAF0",
+           ok:"#DEE9DD",okInk:"#2B5730",warn:"#F2E7D3",warnInk:"#66491A",danger:"#A5333A"},
+    dark: {bg:"#0D1218",card:"#161D25",ink:"#E5EAF0",muted:"#94A0AC",line:"#252E39",
+           accent:"#415974",accentInk:"#F2F6FA",accentSoft:"#1D2732",
+           ok:"#1D2C22",okInk:"#93C79C",warn:"#2E2519",warnInk:"#D6B579",danger:"#E28189"}},
+  clay:{label:"Clay",
+    light:{bg:"#F4F0E9",card:"#FFFDF9",ink:"#2A2119",muted:"#6D6053",line:"#E6DDD0",
+           accent:"#6B4A2E",accentInk:"#FBF5EE",accentSoft:"#EEE4D6",
+           ok:"#E2E7D3",okInk:"#4C5A24",warn:"#F4E5CC",warnInk:"#6B4712",danger:"#9C3D28"},
+    dark: {bg:"#13100C",card:"#1D1712",ink:"#EEE6DB",muted:"#A79782",line:"#2D251B",
+           accent:"#8A5C36",accentInk:"#FBF3EA",accentSoft:"#251D15",
+           ok:"#232A18",okInk:"#B6C486",warn:"#2F2617",warnInk:"#DDBB80",danger:"#DF8C74"}},
+  pine:{label:"Pine",
+    light:{bg:"#F0F4F1",card:"#FFFFFF",ink:"#12211B",muted:"#556A5F",line:"#DCE4DF",
+           accent:"#14503F",accentInk:"#E6F3EE",accentSoft:"#DBEAE3",
+           ok:"#DBEBDB",okInk:"#2C5A2C",warn:"#F4E7CE",warnInk:"#6B4712",danger:"#A83232"},
+    dark: {bg:"#0A110E",card:"#131B17",ink:"#E1ECE6",muted:"#8AA699",line:"#212F28",
+           accent:"#2E7A62",accentInk:"#EFFAF6",accentSoft:"#16241D",
+           ok:"#1A2A1E",okInk:"#8FC79C",warn:"#2D2618",warnInk:"#D9BA7C",danger:"#E0827F"}},
+  indigo:{label:"Indigo",
+    light:{bg:"#F2F1F8",card:"#FFFFFF",ink:"#1B1830",muted:"#5F5B7B",line:"#E2E0ED",
+           accent:"#322B70",accentInk:"#F1EFFB",accentSoft:"#E5E2F3",
+           ok:"#DEE6DD",okInk:"#33582F",warn:"#F1E4D6",warnInk:"#6B4A1C",danger:"#A93055"},
+    dark: {bg:"#0C0B16",card:"#161324",ink:"#E7E4F4",muted:"#9993BB",line:"#252036",
+           accent:"#5B51A8",accentInk:"#F4F2FC",accentSoft:"#1C182E",
+           ok:"#1D2A20",okInk:"#94C69B",warn:"#2C2419",warnInk:"#D9B87E",danger:"#E37E9D"}},
+  ember:{label:"Ember",
+    light:{bg:"#F4F1EF",card:"#FFFFFF",ink:"#241C18",muted:"#695B54",line:"#E4DDD8",
+           accent:"#7A3B1E",accentInk:"#FBF2ED",accentSoft:"#F0E2D9",
+           ok:"#E0E6D6",okInk:"#4A5828",warn:"#F5E4CB",warnInk:"#6E4813",danger:"#A2312C"},
+    dark: {bg:"#110F0D",card:"#1B1714",ink:"#EDE5DF",muted:"#A4958B",line:"#2A231E",
+           accent:"#99451F",accentInk:"#FDF2EA",accentSoft:"#251C16",
+           ok:"#222A17",okInk:"#B2C182",warn:"#2F2617",warnInk:"#DDBA7C",danger:"#E4867B"}}
+};
+var THEME_ORDER = ["graphite","clay","pine","indigo","ember"];
+
+var SLOT_CONTEXT = {
+  "Breakfast":"breakfast only — cereal, toast, eggs, porridge, yogurt, fruit, smoothies, pastries, cooked breakfast items. Do NOT suggest lunch or dinner dishes.",
+  "Brunch":"brunch — eggs benedict, pancakes, avocado toast, full English, waffles, French toast, smoked salmon bagels. Do NOT suggest dinner dishes.",
+  "Lunch":"lunch — sandwiches, soups, salads, wraps, light hot dishes, leftovers. Not heavy evening meals.",
+  "Dinner":"dinner / main evening meal — full cooked meals, pasta, roasts, curries, stir-fries, casseroles, family recipes.",
+  "Tea":"early evening family tea — lighter than dinner, child-friendly, quick to prepare.",
+  "Supper":"light supper — soup, cheese on toast, small plates, leftovers. Not a full dinner.",
+  "Snack":"snacks ONLY — fruit, nuts, yogurt, hummus and veg, rice cakes, small bites. Absolutely NOT main meals."
+};
+
+var CTX_SECTIONS = [
+  {id:"cooking",title:"Cooking method — how it's cooked",items:[
+    {id:"fried",label:"Fried",desc:"In oil or fat — shallow, deep or stir-fried"},
+    {id:"grilled",label:"Grilled",desc:"Under direct overhead heat"},
+    {id:"roasted",label:"Roasted",desc:"Oven, dry heat"},
+    {id:"boiled",label:"Boiled",desc:"In bubbling water or stock"},
+    {id:"steamed",label:"Steamed",desc:"Over simmering water"},
+    {id:"poached",label:"Poached",desc:"Gently, in barely simmering liquid"},
+    {id:"baked",label:"Baked",desc:"Oven, in a dish or tin"},
+    {id:"slow_cooked",label:"Slow cooked",desc:"Low and slow — stew, pulled pork"},
+    {id:"sauteed",label:"Sautéed / pan-fried",desc:"Quickly, in a little fat"},
+    {id:"braised",label:"Braised / stewed",desc:"Browned then simmered in liquid"}
+  ]},
+  {id:"serving",title:"Serving style — how it arrives on the plate",items:[
+    {id:"raw",label:"Raw",desc:"Uncooked — salad tomato, raw onion"},
+    {id:"sliced",label:"Sliced or whole",desc:"Visible pieces on the plate"},
+    {id:"in_sauce",label:"In a sauce or gravy",desc:"Mixed into liquid"},
+    {id:"as_topping",label:"As a topping",desc:"Added on top — fried egg on a burger"},
+    {id:"on_side",label:"As a side",desc:"Served separately alongside"},
+    {id:"blended",label:"Blended or puréed",desc:"Completely smooth — soup, sauce"}
+  ]},
+  {id:"role",title:"Role in the dish",items:[
+    {id:"hidden",label:"Hidden ingredient",desc:"Present but not seen or tasted directly"},
+    {id:"main",label:"The centrepiece",desc:"The star — a roast chicken, a steak"},
+    {id:"in_baking",label:"In baking or batter",desc:"Eggs in a Yorkshire pudding"},
+    {id:"stuffed",label:"Stuffed or as a filling",desc:"Inside something else"}
+  ]}
+];
+var ALL_CTX = CTX_SECTIONS.flatMap(s => s.items.map(i => i.id));
+function ctxLabel(id){
+  for(var s of CTX_SECTIONS) for(var i of s.items) if(i.id===id) return i.label;
+  return id;
+}
+
+/* ── state ────────────────────────────────────────────────── */
+var S = blankState();
+function blankState(){
+  return {
+    members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{},
+    plan:{}, standards:{}, recipes:[], shop:[], cupboard:[],
+    stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
+    prices:{}, spend:[], aliases:{},
+    dayIdx:0, weekOffset:0, apiKey:"",
+    theme:"pine", mode:"auto"
+  };
+}
+var openSlots = new Set();
+var currentMember = null;
+var shopView = "list";
+var scanPages = [], scanResult = null;
+
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+  catch(e){ toast("Couldn't save — storage may be full"); }
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return false;
+    var d = JSON.parse(raw);
+    Object.keys(blankState()).forEach(k => { if(d[k] !== undefined) S[k] = d[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ── helpers ──────────────────────────────────────────────── */
+function esc(s){
+  if(s === null || s === undefined) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function initials(n){ return n.trim().split(/\s+/).map(w=>w[0]).join("").toUpperCase().slice(0,2); }
+function modeBadge(m){
+  return m==="Slimming World"?"b-sw":m==="Low carb / HP"?"b-lc":m==="Fasting"?"b-fast"
+       :(m==="Making own"||m==="Skip")?"b-own":"b-std";
+}
+function catBadge(c){
+  return c==="Slimming World"?"b-sw":c==="Low carb / HP"?"b-lc":c==="Treat meal"?"b-treat":"b-std";
+}
+function toast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+
+/* Ingredient names are matched loosely so "2 red onions" and "onion"
+   land on the same line rather than becoming two. */
+var STOPWORDS = ["fresh","free range","free-range","large","small","medium","ripe","organic",
+                 "chopped","diced","sliced","minced","grated","crushed","finely","roughly",
+                 "of","a","an","the","some","to taste","optional"];
+function normalise(name){
+  var n = " " + String(name).toLowerCase().trim() + " ";
+  n = n.replace(/\(.*?\)/g," ");
+  n = n.replace(/[^a-z\s-]/g," ");
+  STOPWORDS.forEach(w => { n = n.replace(new RegExp("\\s" + w + "\\s","g"), " "); });
+  n = n.replace(/\s+/g," ").trim();
+  n = n.split(" ").map(singular).join(" ");
+  return n;
+}
+function singular(w){
+  if(w.length <= 3 || w.endsWith("ss")) return w;
+  if(w.endsWith("ies")) return w.slice(0,-3) + "y";          // berries -> berry
+  if(/(oes|ches|shes|xes|ses)$/.test(w)) return w.slice(0,-2); // tomatoes -> tomato
+  if(w.endsWith("s")) return w.slice(0,-1);                   // onions -> onion
+  return w;
+}
+/* Words that only describe a variant of the same shopping item.
+   "red onions" should still match the "onions" you keep in;
+   "coconut milk" should NOT match "milk". */
+var MODIFIERS = ["red","white","brown","green","yellow","purple","spring","baby","new",
+                 "plain","wholemeal","self-raising","ground","dried","whole","semi-skimmed",
+                 "skimmed","extra","virgin","light","unsalted","salted","granulated","caster",
+                 "tinned","canned","jarred","frozen","smoked","lean","free","range"];
+function sameItem(a, b){
+  if(a === b) return true;
+  var wa = a.split(" "), wb = b.split(" ");
+  var lo = wa.length < wb.length ? wa : wb, hi = wa.length < wb.length ? wb : wa;
+  if(!lo.length || hi.length === lo.length) return false;
+  if(hi.slice(hi.length - lo.length).join(" ") !== lo.join(" ")) return false;  // same head noun
+  return hi.slice(0, hi.length - lo.length).every(w => MODIFIERS.includes(w));
+}
+function guessAisle(name){
+  var n = normalise(name);
+  var map = [
+    ["household", /\b(foil|cling film|bin bag|kitchen roll|kitchen towel|washing|soap|detergent|sponge|batterie|battery)\b/],
+    ["frozen",    /\bfrozen\b|\b(ice cream|fish finger|oven chip)\b/],
+    ["produce",   /\b(onion|garlic|potato|carrot|tomato|pepper|lettuce|spinach|kale|broccoli|cauliflower|courgette|aubergine|mushroom|cucumber|celery|leek|apple|banana|lemon|lime|orange|berry|avocado|pea|cabbage|sweetcorn|salad|herb|parsley|coriander|basil|ginger|chilli|squash|swede|parsnip|beetroot|grape|melon|pear|peach|spring onion|shallot)\b/],
+    ["meat",      /\b(chicken|beef|pork|lamb|mince|bacon|sausage|steak|turkey|ham|salmon|cod|tuna|prawn|haddock|fish|gammon|chorizo|duck|liver)\b/],
+    ["chilled",   /\b(milk|butter|cheese|yogurt|yoghurt|cream|egg|creme fraiche|mozzarella|cheddar|parmesan|feta|halloumi|quark|margarine|pastry|houmou|hummu)\b/],
+    ["bakery",    /\b(bread|roll|bagel|baguette|pitta|wrap|tortilla|naan|muffin|croissant|bun|crumpet)\b/],
+    ["tins",      /\b(tin|tinned|canned|passata|baked bean|chickpea|lentil|kidney bean|coconut milk|stock|soup|sauce|paste|jar|olive|pickle|mayonnaise|ketchup|mustard|honey|jam)\b/],
+    ["dry",       /\b(pasta|rice|noodle|flour|sugar|oat|cereal|couscou|quinoa|breadcrumb|nut|almond|cashew|raisin|crisp|cracker|spaghetti|penne|lasagne)\b/],
+    ["spices",    /\b(salt|pepper|cumin|paprika|turmeric|cinnamon|oregano|thyme|rosemary|bay leaf|curry powder|garam masala|chilli powder|stock cube|vinegar|oil|spice|seasoning)\b/],
+    ["drinks",    /\b(juice|squash|water|wine|beer|coffee|tea bag|cordial)\b/]
+  ];
+  for(var [id,re] of map) if(re.test(n)) return id;
+  return "other";
+}
+/* Aisles present in the shop you're currently walking, in your order. */
+function currentStore(){
+  var s = S.stores.find(x => x.id === S.activeStore);
+  if(!s){ s = S.stores[0]; if(s) S.activeStore = s.id; }
+  return s;
+}
+function storeAisles(){
+  var s = currentStore();
+  return (s && s.aisles && s.aisles.length) ? s.aisles : defaultAisles();
+}
+function aisleName(id){
+  var a = storeAisles().find(x => x.id === id);
+  if(a) return a.name;
+  var c = AISLE_CATALOGUE.find(x => x.id === id);
+  return c ? c.name : "Other";
+}
+/* If a shop has no aisle for the guessed id, the item falls to the last
+   aisle in that shop's order rather than vanishing. */
+function resolveAisle(id){
+  var s = currentStore();
+  if(!s) return "other";
+  if(!s.aisles || !s.aisles.length) s.aisles = defaultAisles();
+  if(s.aisles.some(a => a.id === id)) return id;
+  if(!s.aisles.some(a => a.id === "other")) s.aisles.push({id:"other", name:"Other"});
+  return "other";
+}
+
+/* ── week / dates ─────────────────────────────────────────── */
+function orderedDays(){
+  var i = DAYS.indexOf(S.weekStart);
+  return DAYS.slice(i).concat(DAYS.slice(0,i));
+}
+function weekStartDate(){
+  var t = new Date(); t.setHours(0,0,0,0);
+  var want = DAYS.indexOf(S.weekStart);
+  var cur = (t.getDay() + 6) % 7;
+  var diff = cur - want; if(diff < 0) diff += 7;
+  t.setDate(t.getDate() - diff + S.weekOffset * 7);
+  return t;
+}
+function dayDate(idx){
+  var d = new Date(weekStartDate()); d.setDate(d.getDate() + idx); return d;
+}
+function fmtDate(d){
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+}
+function updateBadge(){
+  var a = weekStartDate(), b = new Date(a); b.setDate(b.getDate()+6);
+  var lbl = S.weekOffset===0 ? "This week" : S.weekOffset===1 ? "Next week"
+          : S.weekOffset===-1 ? "Last week" : fmtDate(a);
+  document.getElementById("wk-badge").textContent = lbl + " · " + fmtDate(a) + "–" + fmtDate(b);
+}
+
+function slotsForMember(id){
+  var own = S.memberSlots[id];
+  return (own && own.length) ? own : S.slots;
+}
+function ensureCell(day, slot){
+  if(!S.plan[day]) S.plan[day] = {};
+  if(!S.plan[day][slot]) S.plan[day][slot] = {modes:{}, chosen:null, suggestions:[], loaded:false, addedIds:[]};
+  return S.plan[day][slot];
+}
+function stdKey(slot,title){ return slot + "||" + title; }
+
+/* ── navigation ───────────────────────────────────────────── */
+var VIEWS = ["plan","house","recipes","shop","settings"];
+var TITLES = {plan:["Meal Planner","Plan the week"], house:["Household","Who eats what"],
+              recipes:["Recipes","Your saved dishes"], shop:["Shop","List and cupboard"],
+              settings:["Settings","Preferences and backup"]};
+function goTab(name){
+  VIEWS.forEach(v => document.getElementById("v-"+v).hidden = (v !== name));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === name));
+  document.getElementById("top-title").textContent = TITLES[name][0];
+  document.getElementById("top-sub").textContent = TITLES[name][1];
+  document.querySelector(".view:not([hidden])").scrollTop = 0;
+  if(name === "plan") renderPlan();
+  if(name === "house") renderMembers();
+  if(name === "recipes") renderRecipes();
+  if(name === "shop") renderShop();
+  if(name === "settings") renderSettings();
+}
+
+/* ── planner ──────────────────────────────────────────────── */
+function changeDay(dir){
+  var n = orderedDays().length;
+  S.dayIdx += dir;
+  if(S.dayIdx < 0){ S.dayIdx = n-1; S.weekOffset--; }
+  if(S.dayIdx >= n){ S.dayIdx = 0; S.weekOffset++; }
+  save(); renderPlan();
+}
+function renderPlan(){
+  updateBadge();
+  var setup = document.getElementById("plan-setup"), main = document.getElementById("plan-main");
+  if(!S.members.length){
+    setup.hidden = false; main.hidden = true;
+    setup.innerHTML = "Add the people you cook for first.<br><br>" +
+      '<button class="btn" onclick="goTab(\'house\')">Set up household</button>';
+    return;
+  }
+  setup.hidden = true; main.hidden = false;
+
+  var days = orderedDays(), day = days[S.dayIdx];
+  document.getElementById("day-name").textContent = day;
+  document.getElementById("day-date").textContent = fmtDate(dayDate(S.dayIdx));
+
+  var slots = ALL_SLOTS.filter(sl =>
+    S.slots.includes(sl) || S.members.some(m => slotsForMember(m.id).includes(sl)));
+  if(!slots.length){
+    document.getElementById("slots").innerHTML =
+      '<div class="empty">No meals set up.<br><br><button class="btn" onclick="goTab(\'settings\')">Choose meals</button></div>';
+    return;
+  }
+
+  var html = "";
+  slots.forEach(slot => {
+    var cell = ensureCell(day, slot);
+    var key = day + "::" + slot, open = openSlots.has(key);
+    var eating = eatersFor(day, slot);
+    var sub = cell.chosen ? cell.chosen.title
+            : eating.length ? eating.length + (eating.length===1?" eating":" eating") : "nobody eating";
+    html += '<div class="slot"><div class="slot-hd" onclick="toggleSlot(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
+          + '<div class="ttl"><b>' + esc(slot) + '</b><div>' + esc(sub) + '</div></div>'
+          + (cell.chosen ? '<span class="badge b-std">Chosen</span>' : "")
+          + '<span class="chev">' + (open ? "⌄" : "›") + '</span></div>';
+    if(open) html += '<div class="slot-body">' + slotBody(day, slot, cell, eating) + '</div>';
+    html += "</div>";
+  });
+  document.getElementById("slots").innerHTML = html;
+}
+function toggleSlot(day, slot){
+  var k = day + "::" + slot;
+  openSlots.has(k) ? openSlots.delete(k) : openSlots.add(k);
+  renderPlan();
+}
+function eatersFor(day, slot){
+  var cell = ensureCell(day, slot);
+  return S.members.filter(m => {
+    if(!slotsForMember(m.id).includes(slot)) return false;
+    var mode = cell.modes[m.id] || m.mode;
+    return mode !== "Fasting" && mode !== "Skip" && mode !== "Making own";
+  });
+}
+function slotBody(day, slot, cell, eating){
+  var h = "";
+  S.members.filter(m => slotsForMember(m.id).includes(slot)).forEach(m => {
+    var mode = cell.modes[m.id] || m.mode;
+    h += '<div class="mode-row">'
+       + '<div class="avatar" style="width:24px;height:24px;font-size:10px;background:' + m.colour + '">' + esc(initials(m.name)) + '</div>'
+       + '<div class="who">' + esc(m.name) + '</div>'
+       + '<select class="mode-sel" onchange="setMode(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + m.id + '\',this.value)">'
+       + MODES.map(o => '<option' + (o===mode?" selected":"") + '>' + esc(o) + '</option>').join("")
+       + '</select></div>';
+  });
+
+  if(!eating.length){
+    return h + '<div class="hint" style="margin-top:11px">Nobody eating this meal.</div>';
+  }
+
+  if(cell.chosen){
+    var c = cell.chosen;
+    h += '<div class="sug picked" style="margin-top:11px"><div class="st">' + esc(c.title) + '</div>'
+       + (c.why ? '<div class="sw">' + esc(c.why) + '</div>' : "")
+       + '<div class="ss">' + esc(c.source || "") + (c.link ? ' · <a href="' + esc(c.link) + '" target="_blank" rel="noopener">Open</a>' : "") + '</div>'
+       + '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">'
+       + '<button class="mini" onclick="event.stopPropagation();unchoose(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Change meal</button>'
+       + (S.standards[stdKey(slot,c.title)]
+            ? '<button class="mini mut" onclick="event.stopPropagation();unmarkStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\')">★ Regular — remove</button>'
+            : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\')">☆ Make this a regular</button>')
+       + '</div></div>';
+    return h;
+  }
+
+  if(!cell.loaded){
+    h += '<button class="btn wide sm" style="margin-top:12px" id="load-' + esc(day+slot).replace(/\W/g,"") + '"'
+       + ' onclick="event.stopPropagation();loadSuggestions(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
+       + 'Suggest ' + esc(slot.toLowerCase()) + ' for ' + eating.length + '</button>';
+    h += '<div class="hint" style="margin-top:8px">Or pick from your saved recipes below.</div>';
+  }
+  (cell.suggestions || []).forEach((s, i) => {
+    h += '<div class="sug" onclick="event.stopPropagation();choose(\'' + esc(day) + '\',\'' + esc(slot) + '\',' + i + ')">'
+       + '<div class="st">' + (s.is_standard ? "★ " : "") + esc(s.title) + '</div>'
+       + (s.why ? '<div class="sw">' + esc(s.why) + '</div>' : "")
+       + '<div class="ss">' + esc(s.source || "")
+       + (s.buy && s.buy.length ? " · " + s.buy.length + " to buy" : "") + '</div></div>';
+  });
+
+  var saved = S.recipes.filter(r => !cell.suggestions.some(s => s.title === r.title));
+  if(saved.length){
+    h += '<div class="sec-hd" style="margin-top:14px">From your recipes</div>';
+    saved.slice(0,8).forEach(r => {
+      h += '<div class="sug" onclick="event.stopPropagation();chooseSaved(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + r.id + '\')">'
+         + '<div class="st">' + esc(r.title) + '</div>'
+         + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves) + '</div></div>';
+    });
+  }
+  return h;
+}
+function setMode(day, slot, mid, val){
+  ensureCell(day, slot).modes[mid] = val;
+  save(); renderPlan();
+}
+function markStd(slot, title){ S.standards[stdKey(slot,title)] = true; save(); renderPlan(); }
+function unmarkStd(slot, title){ delete S.standards[stdKey(slot,title)]; save(); renderPlan(); }
+
+function choose(day, slot, idx){
+  var cell = ensureCell(day, slot);
+  var s = cell.suggestions[idx]; if(!s) return;
+  removeMealItems(cell);
+  cell.chosen = s;
+  cell.addedIds = addIngredients(s.buy || [], s.title);
+  save(); renderPlan();
+  toast(cell.addedIds.length ? cell.addedIds.length + " items added to your list" : "Meal chosen");
+}
+function chooseSaved(day, slot, rid){
+  var r = S.recipes.find(x => x.id === rid); if(!r) return;
+  var cell = ensureCell(day, slot);
+  removeMealItems(cell);
+  cell.chosen = {title:r.title, why:"From your saved recipes", source:r.source||"Saved recipe", link:r.link||""};
+  cell.addedIds = addIngredients(r.ingredients || [], r.title);
+  save(); renderPlan();
+  toast(cell.addedIds.length ? cell.addedIds.length + " items added to your list" : "Meal chosen");
+}
+function unchoose(day, slot){
+  var cell = ensureCell(day, slot);
+  removeMealItems(cell);
+  cell.chosen = null; cell.loaded = false; cell.suggestions = [];
+  save(); renderPlan();
+}
+</script>
+<script>
+/* ═══ SHOPPING LIST & STORE CUPBOARD ═══════════════════════
+   An item is an object, not a string:
+     {id, name, qty, unit, aisle, status, meal, manual}
+   status: "need" | "have" | "bought"
+   Anything matching a store-cupboard staple arrives as "have"
+   with a flag, so you check the cupboard instead of buying more.
+   ═════════════════════════════════════════════════════════ */
+
+function parseIngredient(raw){
+  if(raw && typeof raw === "object"){
+    return {name:String(raw.name||"").trim(), qty:raw.qty||"", unit:raw.unit||""};
+  }
+  var s = String(raw).trim();
+  var m = s.match(/^([\d]+(?:[.,\/][\d]+)?)\s*(kg|g|ml|l|tbsp|tsp|cloves?|tins?|cans?|packs?|slices?|bunch(?:es)?|handfuls?|x)?\s+(.*)$/i);
+  if(m) return {name:m[3].trim(), qty:m[1], unit:(m[2]||"").trim()};
+  return {name:s, qty:"", unit:""};
+}
+function inCupboard(name){
+  var n = normalise(name);
+  return S.cupboard.find(c => sameItem(normalise(c.name), n));
+}
+function addIngredients(list, mealTitle){
+  var added = [];
+  (list || []).forEach(raw => {
+    var p = parseIngredient(raw);
+    if(!p.name) return;
+    var n = normalise(p.name);
+    var existing = S.shop.find(i => sameItem(normalise(i.name), n) && i.status !== "bought");
+    if(existing){
+      if(!existing.meals.includes(mealTitle)) existing.meals.push(mealTitle);
+      if(p.qty) existing.extra = (existing.extra || []).concat([(p.qty + " " + p.unit).trim()]);
+      added.push(existing.id);
+      return;
+    }
+    var staple = inCupboard(p.name);
+    var item = {
+      id: uid(), name: p.name, qty: p.qty, unit: p.unit,
+      aisle: resolveAisle(staple ? staple.aisle : guessAisle(p.name)),
+      status: staple ? "have" : "need",
+      fromCupboard: !!staple, meals: [mealTitle], manual: false, extra: [],
+      price: null, priceGuess: false
+    };
+    S.shop.push(item); added.push(item.id);
+  });
+  return added;
+}
+function removeMealItems(cell){
+  var ids = new Set(cell.addedIds || []);
+  if(!ids.size) return;
+  S.shop = S.shop.filter(i => !(ids.has(i.id) && !i.manual && i.status !== "bought"));
+  cell.addedIds = [];
+}
+function addShopManual(){
+  var inp = document.getElementById("shop-manual"), v = inp.value.trim();
+  if(!v) return;
+  var p = parseIngredient(v);
+  var picked = document.getElementById("shop-manual-aisle").value;
+  S.shop.push({id:uid(), name:p.name, qty:p.qty, unit:p.unit,
+               aisle:resolveAisle(picked === "auto" ? guessAisle(p.name) : picked),
+               status:"need", fromCupboard:false, meals:[], manual:true, extra:[],
+               price:null, priceGuess:false});
+  inp.value = ""; save(); renderShop();
+}
+function cycleStatus(id){
+  var it = S.shop.find(i => i.id === id); if(!it) return;
+  it.status = it.status === "need" ? "bought" : it.status === "bought" ? "have" : "need";
+  save(); renderShop();
+}
+function setStatus(id, st){
+  var it = S.shop.find(i => i.id === id); if(!it) return;
+  it.status = st; save(); renderShop();
+}
+function delShopItem(id){ S.shop = S.shop.filter(i => i.id !== id); save(); renderShop(); }
+function clearBought(){
+  var n = S.shop.filter(i => i.status === "bought").length;
+  if(!n){ toast("Nothing ticked off yet"); return; }
+  S.shop = S.shop.filter(i => i.status !== "bought");
+  save(); renderShop(); toast(n + " cleared");
+}
+
+function setShopView(v, el){
+  shopView = v;
+  document.querySelectorAll("#shop-tabs .chip").forEach(c => c.classList.remove("on"));
+  if(el) el.classList.add("on");
+  document.getElementById("shop-list-view").hidden = (v !== "list");
+  document.getElementById("shop-cupboard-view").hidden = (v !== "cupboard");
+  document.getElementById("shop-layout-view").hidden = (v !== "layout");
+  document.getElementById("shop-prices-view").hidden = (v !== "prices");
+  renderShop();
+}
+function renderShop(){
+  if(shopView === "cupboard"){ renderCupboard(); return; }
+  if(shopView === "layout"){ renderLayout(); return; }
+  if(shopView === "prices"){ renderPrices(); return; }
+  renderAislePicker();
+  primePrices();
+  var el = document.getElementById("shop-body");
+  var sum = document.getElementById("shop-summary");
+  if(!S.shop.length){
+    sum.innerHTML = "";
+    el.innerHTML = '<div class="empty">Nothing on the list yet.<br>Items appear here when you choose a meal.</div>';
+    return;
+  }
+  var need = S.shop.filter(i => i.status === "need").length;
+  var have = S.shop.filter(i => i.status === "have").length;
+  var got  = S.shop.filter(i => i.status === "bought").length;
+  var t = basketTotal();
+  sum.innerHTML = '<div class="card" style="padding:11px 13px;margin-bottom:10px">'
+    + '<div style="display:flex;align-items:baseline;gap:8px">'
+    + '<div style="font-size:22px;font-weight:600">' + money(t.total) + '</div>'
+    + '<div class="hint">' + (t.missing ? t.missing + " without a price" : "all priced") + '</div></div>'
+    + '<div class="hint" style="margin-top:4px">' + need + " to buy · " + have + " in the cupboard · " + got + " in the trolley"
+    + (t.guessed ? ' · ' + t.guessed + ' at last known price' : "") + '</div></div>';
+
+  var groups = {};
+  S.shop.forEach(i => { (groups[i.aisle] = groups[i.aisle] || []).push(i); });
+  var html = "";
+  storeAisles().forEach(a => {
+    var items = groups[a.id]; if(!items || !items.length) return;
+    html += '<div class="aisle-hd">' + esc(a.name) + '</div>';
+    items.forEach(i => {
+      var q = [i.qty, i.unit].filter(Boolean).join(" ");
+      var meals = (i.meals || []).join(", ");
+      html += '<div class="shop-row ' + (i.status === "bought" ? "bought" : i.status === "have" ? "have" : "") + '">'
+        + '<div class="chk' + (i.status === "bought" ? " done" : "") + '" onclick="cycleStatus(\'' + i.id + '\')">'
+        + (i.status === "bought" ? "✓" : "") + '</div>'
+        + '<div class="grow"><div class="nm">' + esc(i.name) + (q ? ' <span class="qty">' + esc(q) + '</span>' : "") + '</div>'
+        + (meals ? '<div class="mt">' + esc(meals) + '</div>' : "") + '</div>'
+        + (i.status === "have"
+            ? '<span class="cupboard-flag">In cupboard</span><button class="mini" onclick="setStatus(\'' + i.id + '\',\'need\')">Need it</button>'
+            : i.fromCupboard && i.status === "need"
+              ? '<button class="mini mut" onclick="setStatus(\'' + i.id + '\',\'have\')">Have it</button>' : "")
+        + (i.status === "have" ? ""
+            : '<button class="mini' + (i.priceGuess ? " mut" : "") + '" onclick="editPrice(\'' + i.id + '\')">'
+              + (i.price == null ? "£ —" : money(i.price)) + '</button>')
+        + '<button class="xdel" onclick="delShopItem(\'' + i.id + '\')" aria-label="Remove">×</button>'
+        + '</div>';
+    });
+  });
+  el.innerHTML = html;
+  if(document.body.classList.contains("store")){
+    var left = S.shop.filter(i => i.status === "need").length;
+    document.getElementById("store-count").textContent =
+      left ? left + " left to find" : "All done — nice one";
+  }
+}
+
+/* ── store cupboard ── */
+function renderCupboard(){
+  var el = document.getElementById("cupboard-body");
+  if(!S.cupboard.length){
+    el.innerHTML = '<div class="empty">No staples yet.<br>Add the things you always keep in.</div>';
+    return;
+  }
+  var groups = {};
+  S.cupboard.forEach(c => { (groups[c.aisle] = groups[c.aisle] || []).push(c); });
+  var html = "";
+  storeAisles().forEach(a => {
+    var items = groups[a.id]; if(!items) return;
+    html += '<div class="aisle-hd">' + esc(a.name) + '</div>';
+    items.forEach(c => {
+      html += '<div class="shop-row"><div class="grow"><div class="nm">' + esc(c.name) + '</div></div>'
+        + '<button class="xdel" onclick="delCupboard(\'' + c.id + '\')" aria-label="Remove">×</button></div>';
+    });
+  });
+  el.innerHTML = html;
+}
+function addCupboard(){
+  var inp = document.getElementById("cup-manual"), v = inp.value.trim();
+  if(!v) return;
+  v.split(",").map(x => x.trim()).filter(Boolean).forEach(name => {
+    if(S.cupboard.some(c => normalise(c.name) === normalise(name))) return;
+    S.cupboard.push({id:uid(), name:name, aisle:guessAisle(name)});
+  });
+  inp.value = ""; save(); renderCupboard();
+}
+function delCupboard(id){ S.cupboard = S.cupboard.filter(c => c.id !== id); save(); renderCupboard(); }
+function seedCupboard(){
+  ["salt","black pepper","olive oil","vegetable oil","plain flour","sugar","onions","garlic",
+   "tinned chopped tomatoes","tomato purée","stock cubes","pasta","rice","baked beans",
+   "cumin","paprika","dried oregano","curry powder","vinegar","soy sauce","butter","milk","eggs"]
+    .forEach(name => {
+      if(S.cupboard.some(c => normalise(c.name) === normalise(name))) return;
+      S.cupboard.push({id:uid(), name:name, aisle:guessAisle(name)});
+    });
+  save(); renderCupboard(); toast("Staples added — trim anything you don't keep");
+}
+
+/* ── store mode ── */
+function enterStore(){
+  if(!S.shop.filter(i => i.status === "need").length){ toast("Nothing to buy"); return; }
+  document.body.classList.add("store");
+  document.getElementById("storebar").hidden = false;
+  document.getElementById("top-sub").textContent = "Shopping";
+  renderShop();
+}
+function exitStore(){
+  document.body.classList.remove("store");
+  document.getElementById("storebar").hidden = true;
+  document.getElementById("top-sub").textContent = TITLES.shop[1];
+  renderShop();
+}
+function shopListText(){
+  var out = ["Shopping list — " + (currentStore() ? currentStore().name : ""), ""];
+  var groups = {};
+  S.shop.filter(i => i.status === "need").forEach(i => { (groups[i.aisle] = groups[i.aisle] || []).push(i); });
+  storeAisles().forEach(a => {
+    if(!groups[a.id]) return;
+    out.push(a.name.toUpperCase());
+    groups[a.id].forEach(i => out.push("- " + [i.qty, i.unit, i.name].filter(Boolean).join(" ")));
+    out.push("");
+  });
+  return out.join("\n").trim() || "Nothing to buy.";
+}
+function copyShopList(){ copyText(shopListText(), "List copied"); }
+
+/* ═══ CLAUDE API ═══════════════════════════════════════════ */
+function haveKey(){ return !!(S.apiKey && S.apiKey.trim()); }
+async function callClaude(system, content, maxTokens){
+  if(!haveKey()) throw new Error("no-key");
+  var res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key":S.apiKey.trim(),
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body:JSON.stringify({model:MODEL, max_tokens:maxTokens||1200, system:system,
+                         messages:[{role:"user", content:content}]})
+  });
+  if(!res.ok){
+    var t = await res.text();
+    if(res.status === 401) throw new Error("bad-key");
+    throw new Error("HTTP " + res.status + " " + t.slice(0,120));
+  }
+  var data = await res.json();
+  var raw = (data.content || []).map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
+  return JSON.parse(raw);
+}
+
+async function loadSuggestions(day, slot){
+  if(!haveKey()){
+    toast("Add your Claude API key in Settings first");
+    goTab("settings"); return;
+  }
+  var cell = ensureCell(day, slot);
+  var eating = eatersFor(day, slot);
+  var btn = document.getElementById("load-" + (day+slot).replace(/\W/g,""));
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="pulse">Finding options…</span>'; }
+
+  var diets = [...new Set(eating.map(m => cell.modes[m.id] || m.mode))].filter(d => d !== "Standard");
+  var profiles = eating.map(m => {
+    var likes = (m.likes||[]).map(p => p.food + (p.contexts.length ? " (likes: " + p.contexts.map(ctxLabel).join(", ") + ")" : "") + (p.note ? " — " + p.note : "")).join("; ");
+    var dis = (m.dislikes||[]).map(p => p.food + (p.contexts.length ? " (dislikes when: " + p.contexts.map(ctxLabel).join(", ") + ")" : "") + (p.note ? " — " + p.note : "")).join("; ");
+    var al = (m.allergies||[]).join(", ");
+    return m.name + ": " + (cell.modes[m.id] || m.mode)
+      + (likes ? " | likes: " + likes : "") + (dis ? " | dislikes: " + dis : "")
+      + (al ? " | ALWAYS EXCLUDE: " + al : "");
+  }).join("\n");
+
+  var planned = [];
+  orderedDays().forEach(d => {
+    if(S.plan[d]) Object.values(S.plan[d]).forEach(c => { if(c.chosen) planned.push(c.chosen.title); });
+  });
+  var stds = Object.keys(S.standards).filter(k => k.split("||")[0] === slot).map(k => k.split("||").slice(1).join("||"));
+  var cupboard = S.cupboard.map(c => c.name).join(", ");
+  var saved = S.recipes.map(r => r.title + " (" + r.category + ", serves " + r.serves + ")").join("; ");
+
+  var system = "You are a personal household recipe assistant for UK family cooking. You are a discovery and planning assistant — NOT a recipe database.\n"
+    + "Recommend dishes from: Pinch of Nom (pinchofnom.com), ZOE (zoe.com/learn), BBC Good Food (bbcgoodfood.com), or the household's own saved recipes. Never reproduce a full recipe — give the title, a one-line reason, a link, and the ingredients needed.\n\n"
+    + "MEAL SLOT: " + slot + ". " + (SLOT_CONTEXT[slot] || "") + "\n\n"
+    + "VARIETY: do NOT suggest any of these already-planned meals: " + (planned.join(", ") || "none") + ".\n"
+    + "REGULARS for " + slot + ": " + (stds.join(", ") || "none") + ". If any exist, include one and set is_standard true.\n"
+    + "PORTIONS: cook for " + (eating.length || 1) + ".\n"
+    + (diets.length ? "DIETS TO COVER: " + diets.join(", ") + "\n" : "")
+    + "WHO'S EATING:\n" + (profiles || "Standard household") + "\n"
+    + "STORE CUPBOARD (assume these are in): " + (cupboard || "not specified") + "\n"
+    + "SAVED RECIPES: " + (saved || "none") + "\n\n"
+    + "Return 3-5 suggestions as valid JSON only, no markdown fences:\n"
+    + '{"recipes":[{"title":"","source":"","link":"","why":"","suits_sw":false,"suits_lc":false,'
+    + '"buy":[{"name":"chicken breasts","qty":"4","unit":""}],"is_standard":false}]}\n'
+    + 'In "buy", list every ingredient the dish needs that is NOT in the store cupboard. Use plain shopping names — "chicken breasts", not "free-range chicken breast fillets, diced".';
+
+  try{
+    var parsed = await callClaude(system,
+      "Suggest " + slot + " options for " + day + ". " + (eating.length||1) + " eating."
+      + (diets.length ? " Diets: " + diets.join(", ") : ""), 1400);
+    cell.suggestions = parsed.recipes || [];
+    cell.suggestions.forEach(s => { if(stds.includes(s.title)) s.is_standard = true; });
+    cell.loaded = true;
+  }catch(e){
+    cell.loaded = false;
+    toast(e.message === "bad-key" ? "That API key was rejected — check Settings"
+        : e.message === "no-key" ? "Add your API key in Settings"
+        : "Couldn't reach Claude — check your connection");
+  }
+  save(); renderPlan();
+}
+
+/* ── recipes ── */
+function handlePhotos(ev){
+  [...ev.target.files].forEach(f => {
+    var r = new FileReader();
+    r.onload = e => { scanPages.push({dataUrl:e.target.result, type:f.type}); renderThumbs(); };
+    r.readAsDataURL(f);
+  });
+  ev.target.value = "";
+}
+function renderThumbs(){
+  document.getElementById("thumbs").innerHTML = scanPages.map((p,i) =>
+    '<div style="position:relative"><img src="' + p.dataUrl + '" style="width:56px;height:56px;object-fit:cover;border-radius:7px">'
+    + '<button class="xdel" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;width:20px;height:20px;box-shadow:var(--sh)" onclick="removePage(' + i + ')">×</button></div>').join("");
+  document.getElementById("scan-btn").disabled = !scanPages.length;
+}
+function removePage(i){ scanPages.splice(i,1); renderThumbs(); }
+async function runScan(){
+  if(!haveKey()){ toast("Add your Claude API key in Settings first"); goTab("settings"); return; }
+  var btn = document.getElementById("scan-btn");
+  btn.disabled = true; btn.innerHTML = '<span class="pulse">Reading…</span>';
+  var content = scanPages.map(p => ({
+    type:"image",
+    source:{type:"base64", media_type:p.type || "image/jpeg", data:p.dataUrl.split(",")[1]}
+  }));
+  content.push({type:"text", text:"Read this recipe from the photos."});
+  try{
+    var r = await callClaude(
+      "Read the recipe from the photographed cookbook pages. Return valid JSON only, no markdown:\n"
+      + '{"title":"","serves":4,"category":"","ingredients":[{"name":"","qty":"","unit":""}],"method":""}\n'
+      + 'category must be one of: ' + RECIPE_CATS.join(", ") + '. Use plain shopping names in ingredients. Keep method to a brief summary of the steps, not a verbatim copy.',
+      content, 1600);
+    scanResult = r;
+    document.getElementById("scan-out").innerHTML =
+      '<div class="card" style="margin:12px 0 0;background:var(--teal-100);border-color:var(--teal-300)">'
+      + '<b>' + esc(r.title) + '</b><div class="hint">' + esc(r.category) + ' · serves ' + esc(r.serves)
+      + ' · ' + (r.ingredients||[]).length + ' ingredients</div>'
+      + '<div class="row" style="margin-top:11px"><button class="btn ghost sm" onclick="cancelScan()">Discard</button>'
+      + '<button class="btn sm" onclick="confirmScan()">Save recipe</button></div></div>';
+  }catch(e){
+    toast(e.message === "bad-key" ? "That API key was rejected" : "Couldn't read those pages");
+  }
+  btn.disabled = false; btn.textContent = "Read pages";
+}
+function confirmScan(){
+  if(!scanResult) return;
+  S.recipes.push({id:uid(), title:scanResult.title || "Untitled",
+    serves:scanResult.serves || 4,
+    category:RECIPE_CATS.includes(scanResult.category) ? scanResult.category : "General eating",
+    ingredients:scanResult.ingredients || [], method:scanResult.method || "",
+    source:"Cookbook", link:""});
+  cancelScan(); save(); renderRecipes(); toast("Recipe saved");
+}
+function cancelScan(){
+  scanPages = []; scanResult = null;
+  renderThumbs(); document.getElementById("scan-out").innerHTML = "";
+}
+function saveManualRecipe(){
+  var t = document.getElementById("mr-title").value.trim();
+  if(!t){ toast("Give the recipe a title"); return; }
+  var ings = document.getElementById("mr-ings").value.split("\n").map(x => x.trim()).filter(Boolean).map(parseIngredient);
+  S.recipes.push({id:uid(), title:t,
+    serves:parseInt(document.getElementById("mr-serves").value) || 4,
+    category:document.getElementById("mr-cat").value,
+    ingredients:ings, method:"", source:document.getElementById("mr-src").value.trim(), link:""});
+  document.getElementById("mr-title").value = "";
+  document.getElementById("mr-ings").value = "";
+  document.getElementById("mr-src").value = "";
+  save(); renderRecipes(); toast("Recipe saved");
+}
+function delRecipe(id){
+  if(!confirm("Delete this recipe?")) return;
+  S.recipes = S.recipes.filter(r => r.id !== id); save(); renderRecipes();
+}
+function renderRecipes(){
+  var el = document.getElementById("recipe-groups");
+  if(!S.recipes.length){
+    el.innerHTML = '<div class="empty">No saved recipes yet.</div>'; return;
+  }
+  var html = "";
+  RECIPE_CATS.forEach(cat => {
+    var rs = S.recipes.filter(r => r.category === cat); if(!rs.length) return;
+    html += '<div class="sec-hd">' + esc(cat) + '</div><div class="card flush">';
+    rs.forEach(r => {
+      html += '<div class="list-item"><div class="grow"><div class="nm">' + esc(r.title) + '</div>'
+        + '<div class="mt">serves ' + esc(r.serves) + ' · ' + (r.ingredients||[]).length + ' ingredients'
+        + (r.source ? ' · ' + esc(r.source) : "") + '</div></div>'
+        + '<span class="badge ' + catBadge(cat) + '">' + esc(cat.split(" ")[0]) + '</span>'
+        + '<button class="xdel" onclick="delRecipe(\'' + r.id + '\')" aria-label="Delete">×</button></div>';
+    });
+    html += "</div>";
+  });
+  el.innerHTML = html;
+}
+/* ═══ SHOP LAYOUT — aisle order per shop ═══════════════════
+   Different supermarkets are laid out differently, so the
+   walking order is stored against the shop, not globally.
+   ═════════════════════════════════════════════════════════ */
+function renderAislePicker(){
+  var sel = document.getElementById("shop-manual-aisle");
+  if(!sel) return;
+  sel.innerHTML = '<option value="auto">Aisle: work it out for me</option>'
+    + storeAisles().map(a => '<option value="' + esc(a.id) + '">' + esc(a.name) + '</option>').join("");
+}
+function renderLayout(){
+  var chips = document.getElementById("store-chips");
+  chips.innerHTML = S.stores.map(s =>
+    '<div class="chip' + (s.id === S.activeStore ? " on" : "") + '" onclick="pickStore(\'' + s.id + '\')">'
+    + esc(s.name) + '</div>').join("");
+
+  var list = storeAisles(), el = document.getElementById("layout-body");
+  el.innerHTML = list.map((a, i) =>
+    '<div class="shop-row">'
+    + '<button class="ord" onclick="moveAisle(' + i + ',-1)" ' + (i === 0 ? "disabled" : "") + ' aria-label="Move up">▲</button>'
+    + '<button class="ord" onclick="moveAisle(' + i + ',1)" ' + (i === list.length-1 ? "disabled" : "") + ' aria-label="Move down">▼</button>'
+    + '<div class="grow"><div class="nm">' + esc(a.name) + '</div>'
+    + '<div class="mt">' + countIn(a.id) + '</div></div>'
+    + '<button class="mini" onclick="renameAisle(\'' + esc(a.id) + '\')">Rename</button>'
+    + '<button class="xdel" onclick="delAisle(\'' + esc(a.id) + '\')" aria-label="Remove">×</button>'
+    + '</div>').join("");
+}
+function countIn(id){
+  var n = S.shop.filter(i => i.aisle === id).length;
+  return n ? n + (n === 1 ? " item" : " items") : "empty";
+}
+function pickStore(id){ S.activeStore = id; remapItems(); save(); renderLayout(); }
+function addStore(){
+  var inp = document.getElementById("store-new"), v = inp.value.trim();
+  if(!v) return;
+  var s = {id:uid(), name:v, aisles:defaultAisles()};
+  S.stores.push(s); S.activeStore = s.id;
+  inp.value = ""; save(); renderLayout();
+  toast(v + " added — set the aisle order below");
+}
+function delStore(){
+  if(S.stores.length < 2){ toast("Keep at least one shop"); return; }
+  var s = currentStore();
+  if(!confirm("Remove " + s.name + "? Your shopping list isn't affected.")) return;
+  S.stores = S.stores.filter(x => x.id !== s.id);
+  S.activeStore = S.stores[0].id;
+  remapItems(); save(); renderLayout();
+}
+function moveAisle(i, dir){
+  var s = currentStore(); if(!s) return;
+  if(!s.aisles || !s.aisles.length) s.aisles = defaultAisles();
+  var j = i + dir;
+  if(j < 0 || j >= s.aisles.length) return;
+  var tmp = s.aisles[i]; s.aisles[i] = s.aisles[j]; s.aisles[j] = tmp;
+  save(); renderLayout();
+}
+function renameAisle(id){
+  var s = currentStore(); if(!s) return;
+  var a = s.aisles.find(x => x.id === id); if(!a) return;
+  var v = prompt("Call this aisle:", a.name);
+  if(v === null) return;
+  v = v.trim(); if(!v) return;
+  a.name = v; save(); renderLayout();
+}
+function addAisle(){
+  var inp = document.getElementById("aisle-new"), v = inp.value.trim();
+  if(!v) return;
+  var s = currentStore(); if(!s) return;
+  if(!s.aisles) s.aisles = defaultAisles();
+  s.aisles.push({id:uid(), name:v});
+  inp.value = ""; save(); renderLayout();
+}
+function delAisle(id){
+  var s = currentStore(); if(!s) return;
+  if(id === "other"){ toast("Other stays — it catches anything unmatched"); return; }
+  if(s.aisles.length < 2){ toast("Keep at least one aisle"); return; }
+  var a = s.aisles.find(x => x.id === id);
+  var n = S.shop.filter(i => i.aisle === id).length;
+  if(n && !confirm(n + " item" + (n===1?"":"s") + " will move to the last aisle. Remove " + a.name + "?")) return;
+  s.aisles = s.aisles.filter(x => x.id !== id);
+  remapItems(); save(); renderLayout();
+}
+/* Anything sitting in an aisle this shop doesn't have gets re-homed. */
+function remapItems(){
+  var ids = new Set(storeAisles().map(a => a.id));
+  S.shop.forEach(i => { if(!ids.has(i.aisle)) i.aisle = resolveAisle(i.aisle); });
+}
+
+/* ═══ PRICES ═══════════════════════════════════════════════
+   Every price is stamped with shop, date and where it came
+   from. That stamping is the bit that can't be added later,
+   so it exists from the first shop — receipts and shelf-label
+   scanning just become extra ways to fill the same store.
+
+     S.prices[storeId][key] = [{p, up, unit, date, src, promo}]
+     S.aliases[storeId][receiptText] = key      (for the scanner)
+     S.spend = [{id, date, storeId, total, n, items:[…]}]
+   ═════════════════════════════════════════════════════════ */
+function priceKey(name){ return normalise(name); }
+function priceLog(storeId, key){
+  return (S.prices[storeId] && S.prices[storeId][key]) || [];
+}
+function lastPrice(storeId, key){
+  var log = priceLog(storeId, key);
+  return log.length ? log[log.length - 1] : null;
+}
+function recordPrice(storeId, key, price, opts){
+  opts = opts || {};
+  if(!S.prices[storeId]) S.prices[storeId] = {};
+  if(!S.prices[storeId][key]) S.prices[storeId][key] = [];
+  var log = S.prices[storeId][key];
+  var today = new Date().toISOString().slice(0,10);
+  var last = log[log.length - 1];
+  var rec = {p:price, up:opts.unitPrice || null, unit:opts.unit || "",
+             date:today, src:opts.src || "manual", promo:!!opts.promo};
+  /* Same price on the same day from the same source is not new information. */
+  if(last && last.date === today && last.p === price && last.src === rec.src) return;
+  log.push(rec);
+  if(log.length > 40) log.splice(0, log.length - 40);
+}
+function money(n){
+  if(n === null || n === undefined || isNaN(n)) return "—";
+  return "£" + Number(n).toFixed(2);
+}
+function parseMoney(s){
+  var m = String(s).replace(/[^\d.]/g, "");
+  var v = parseFloat(m);
+  return isNaN(v) ? null : Math.round(v * 100) / 100;
+}
+/* Pull the last known price for this shop onto anything unpriced. */
+function primePrices(){
+  var sid = S.activeStore;
+  S.shop.forEach(i => {
+    if(i.price !== null && i.price !== undefined) return;
+    var lp = lastPrice(sid, priceKey(i.name));
+    if(lp){ i.price = lp.p; i.priceGuess = true; }
+  });
+}
+function editPrice(id){
+  var it = S.shop.find(x => x.id === id); if(!it) return;
+  var v = prompt("Price for " + it.name + (it.qty ? " (" + [it.qty, it.unit].filter(Boolean).join(" ") + ")" : "")
+                 + "\nLeave empty to clear.", it.price != null ? Number(it.price).toFixed(2) : "");
+  if(v === null) return;
+  if(!v.trim()){ it.price = null; it.priceGuess = false; save(); renderShop(); return; }
+  var n = parseMoney(v);
+  if(n === null){ toast("Couldn't read that as a price"); return; }
+  it.price = n; it.priceGuess = false;
+  recordPrice(S.activeStore, priceKey(it.name), n, {src:"manual"});
+  save(); renderShop();
+}
+function basketTotal(){
+  var live = S.shop.filter(i => i.status !== "have");
+  var priced = live.filter(i => i.price != null);
+  return {
+    total: priced.reduce((a,i) => a + Number(i.price), 0),
+    priced: priced.length, missing: live.length - priced.length,
+    guessed: priced.filter(i => i.priceGuess).length
+  };
+}
+function finishShop(){
+  var bought = S.shop.filter(i => i.status === "bought");
+  if(!bought.length){ toast("Nothing ticked off as bought yet"); return; }
+  var priced = bought.filter(i => i.price != null);
+  var total = priced.reduce((a,i) => a + Number(i.price), 0);
+  var msg = "Save this shop?\n" + bought.length + " items, " + money(total)
+          + (priced.length < bought.length ? "\n(" + (bought.length - priced.length) + " without a price)" : "");
+  if(!confirm(msg)) return;
+  var store = currentStore();
+  S.spend.push({
+    id:uid(), date:new Date().toISOString().slice(0,10),
+    storeId:store ? store.id : "default", storeName:store ? store.name : "Shop",
+    total:total, n:bought.length,
+    items:bought.map(i => ({name:i.name, price:i.price == null ? null : Number(i.price)}))
+  });
+  if(S.spend.length > 120) S.spend.splice(0, S.spend.length - 120);
+  /* Anything ticked off is a confirmed price for this shop today. */
+  priced.forEach(i => recordPrice(S.activeStore, priceKey(i.name), Number(i.price), {src:"shop"}));
+  S.shop = S.shop.filter(i => i.status !== "bought");
+  save(); renderShop(); toast("Saved — " + money(total));
+}
+
+function renderPrices(){
+  var el = document.getElementById("spend-body");
+  if(!S.spend.length){
+    el.innerHTML = '<div class="empty">No shops saved yet.<br>Tick items off, then tap Finish shop.</div>';
+  } else {
+    var recent = S.spend.slice(-12).reverse();
+    el.innerHTML = recent.map(s =>
+      '<div class="shop-row"><div class="grow"><div class="nm">' + money(s.total) + '</div>'
+      + '<div class="mt">' + esc(s.storeName) + ' · ' + esc(s.date) + ' · ' + s.n + ' items</div></div>'
+      + '<button class="xdel" onclick="delSpend(\'' + s.id + '\')" aria-label="Remove">×</button></div>').join("");
+    var last4 = S.spend.slice(-4);
+    if(last4.length > 1){
+      var avg = last4.reduce((a,s) => a + s.total, 0) / last4.length;
+      el.innerHTML = '<div class="shop-row" style="background:var(--accent-soft)"><div class="grow">'
+        + '<div class="nm">' + money(avg) + ' average</div>'
+        + '<div class="mt">across your last ' + last4.length + ' shops</div></div></div>' + el.innerHTML;
+    }
+  }
+
+  var tel = document.getElementById("trend-body");
+  var rows = [];
+  Object.keys(S.prices).forEach(sid => {
+    var store = S.stores.find(x => x.id === sid);
+    Object.keys(S.prices[sid]).forEach(key => {
+      var log = S.prices[sid][key].filter(r => !r.promo);
+      if(log.length < 2) return;
+      var first = log[0], last = log[log.length - 1];
+      if(first.p === 0) return;
+      rows.push({key:key, store:store ? store.name : "Shop",
+                 from:first.p, to:last.p, d1:first.date, d2:last.date,
+                 pct:((last.p - first.p) / first.p) * 100, n:log.length});
+    });
+  });
+  rows.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
+  if(!rows.length){
+    tel.innerHTML = '<div class="empty">Nothing to compare yet.<br>'
+      + 'An item needs a price recorded on two separate occasions before a trend means anything.</div>';
+    return;
+  }
+  tel.innerHTML = rows.slice(0, 25).map(r => {
+    var up = r.pct > 0.5, down = r.pct < -0.5;
+    var arrow = up ? "▲" : down ? "▼" : "–";
+    return '<div class="shop-row"><div class="grow"><div class="nm">' + esc(r.key) + '</div>'
+      + '<div class="mt">' + esc(r.store) + ' · ' + money(r.from) + ' → ' + money(r.to)
+      + ' · ' + esc(r.d1) + ' to ' + esc(r.d2) + '</div></div>'
+      + '<span class="cupboard-flag" style="' + (down ? "background:var(--ok);color:var(--ok-ink)" : "") + '">'
+      + arrow + " " + Math.abs(r.pct).toFixed(0) + '%</span></div>';
+  }).join("");
+}
+function delSpend(id){
+  if(!confirm("Remove this shop from your history?")) return;
+  S.spend = S.spend.filter(s => s.id !== id); save(); renderPrices();
+}
+function exportPrices(){
+  var lines = ["shop,item,price,unit_price,unit,date,source,promo"];
+  Object.keys(S.prices).forEach(sid => {
+    var store = S.stores.find(x => x.id === sid);
+    var sname = (store ? store.name : sid).replace(/,/g, " ");
+    Object.keys(S.prices[sid]).forEach(key => {
+      S.prices[sid][key].forEach(r => {
+        lines.push([sname, key.replace(/,/g," "), r.p, r.up == null ? "" : r.up,
+                    r.unit, r.date, r.src, r.promo ? "yes" : "no"].join(","));
+      });
+    });
+  });
+  if(lines.length === 1){ toast("No prices recorded yet"); return; }
+  var blob = new Blob([lines.join("\n")], {type:"text/csv"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "price-history-" + new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast((lines.length - 1) + " price records exported");
+}
+
+</script>
+<script>
+/* ═══ HOUSEHOLD ════════════════════════════════════════════ */
+function showHouseList(){
+  document.getElementById("house-list").hidden = false;
+  document.getElementById("house-detail").hidden = true;
+  currentMember = null; renderMembers();
+}
+function renderMembers(){
+  if(currentMember){ renderMemberDetail(); return; }
+  var el = document.getElementById("member-list");
+  if(!S.members.length){
+    el.innerHTML = '<div class="empty">Nobody added yet.<br>Start with yourself.</div>'; return;
+  }
+  el.innerHTML = S.members.map(m =>
+    '<div class="list-item" onclick="openMember(\'' + m.id + '\')">'
+    + '<div class="avatar" style="background:' + m.colour + '">' + esc(initials(m.name)) + '</div>'
+    + '<div class="grow"><div class="nm">' + esc(m.name) + '</div>'
+    + '<div class="mt">' + slotsForMember(m.id).join(", ") + '</div></div>'
+    + '<span class="badge ' + modeBadge(m.mode) + '">' + esc(m.mode) + '</span>'
+    + '<span class="chev">›</span></div>').join("");
+}
+function openAddMember(){
+  if(S.members.length >= 6){ toast("Six is the limit"); return; }
+  var f = document.getElementById("add-member"); f.hidden = false;
+  document.getElementById("nm-name").value = "";
+  document.getElementById("nm-diet").innerHTML = MODES.map((o,i) =>
+    '<div class="chip' + (i===0?" on":"") + '" onclick="soloChip(this,\'nm-diet\')">' + esc(o) + '</div>').join("");
+  document.getElementById("nm-name").focus();
+}
+function closeAddMember(){ document.getElementById("add-member").hidden = true; }
+function soloChip(el, gid){
+  document.querySelectorAll("#" + gid + " .chip").forEach(c => c.classList.remove("on"));
+  el.classList.add("on");
+}
+function chipVal(gid){
+  var c = document.querySelector("#" + gid + " .chip.on");
+  return c ? c.textContent.trim() : "";
+}
+function saveMember(){
+  var name = document.getElementById("nm-name").value.trim();
+  if(!name){ toast("Name needed"); return; }
+  S.members.push({id:uid(), name:name, mode:chipVal("nm-diet") || "Standard",
+    colour:AVATAR_COLOURS[S.members.length % AVATAR_COLOURS.length],
+    likes:[], dislikes:[], allergies:[]});
+  closeAddMember(); save(); renderMembers();
+}
+function openMember(id){
+  currentMember = id;
+  document.getElementById("house-list").hidden = true;
+  document.getElementById("house-detail").hidden = false;
+  renderMemberDetail();
+}
+function me(){ return S.members.find(m => m.id === currentMember); }
+function renderMemberDetail(){
+  var m = me(); if(!m){ showHouseList(); return; }
+  var av = document.getElementById("md-avatar");
+  av.textContent = initials(m.name); av.style.background = m.colour;
+  document.getElementById("md-name").textContent = m.name;
+  document.getElementById("md-mode").textContent = m.mode;
+  document.getElementById("md-diet").innerHTML = MODES.map(o =>
+    '<div class="chip' + (o===m.mode?" on":"") + '" onclick="setMemberMode(\'' + esc(o) + '\')">' + esc(o) + '</div>').join("");
+  var own = S.memberSlots[m.id] || [];
+  document.getElementById("md-slots").innerHTML = ALL_SLOTS.map(sl =>
+    '<div class="chip' + (own.includes(sl)?" on":"") + '" onclick="toggleMemberSlot(\'' + esc(sl) + '\')">' + esc(sl) + '</div>').join("");
+  renderAllergies(); renderPrefs("like"); renderPrefs("dislike");
+}
+function setMemberMode(v){ var m = me(); if(!m) return; m.mode = v; save(); renderMemberDetail(); }
+function toggleMemberSlot(sl){
+  var m = me(); if(!m) return;
+  var arr = S.memberSlots[m.id] || [];
+  arr = arr.includes(sl) ? arr.filter(x => x !== sl) : arr.concat([sl]);
+  S.memberSlots[m.id] = ALL_SLOTS.filter(x => arr.includes(x));
+  save(); renderMemberDetail();
+}
+function deleteMember(){
+  var m = me(); if(!m) return;
+  if(!confirm("Remove " + m.name + " from the household?")) return;
+  S.members = S.members.filter(x => x.id !== m.id);
+  delete S.memberSlots[m.id];
+  save(); showHouseList();
+}
+function addAllergy(){
+  var m = me(), inp = document.getElementById("allergy-in"), v = inp.value.trim();
+  if(!m || !v) return;
+  v.split(",").map(x => x.trim()).filter(Boolean).forEach(a => {
+    if(!m.allergies.includes(a)) m.allergies.push(a);
+  });
+  inp.value = ""; save(); renderAllergies();
+}
+function delAllergy(a){
+  var m = me(); if(!m) return;
+  m.allergies = m.allergies.filter(x => x !== a); save(); renderAllergies();
+}
+function renderAllergies(){
+  var m = me(); if(!m) return;
+  document.getElementById("md-allergies").innerHTML = m.allergies.length
+    ? m.allergies.map(a => '<span class="chip">' + esc(a)
+        + '<button class="xdel" style="font-size:15px" onclick="delAllergy(\'' + esc(a) + '\')">×</button></span>').join("")
+    : '<span class="hint">None recorded.</span>';
+}
+
+/* ── likes / dislikes with context ── */
+function openPref(type){
+  var el = document.getElementById(type + "-form");
+  el.innerHTML = '<div class="card" id="' + type + '-inner">'
+    + '<label class="fld">Food</label>'
+    + '<input type="text" id="' + type + '-food" placeholder="e.g. mushrooms" autocomplete="off">'
+    + '<label class="fld">When? <span style="font-weight:400;color:var(--n-400)">Leave blank for always</span></label>'
+    + '<div class="chip" style="margin-bottom:4px" onclick="toggleAllCtx(\'' + type + '\')">Select all</div>'
+    + CTX_SECTIONS.map(s => '<div class="ctx-sec"><h4>' + esc(s.title) + '</h4>'
+        + s.items.map(i => '<div class="ctx-row" onclick="toggleCtx(this)" data-id="' + i.id + '">'
+            + '<div class="ctx-cb"></div><div><div class="cl">' + esc(i.label) + '</div>'
+            + '<div class="cd">' + esc(i.desc) + '</div></div></div>').join("")
+        + '</div>').join("")
+    + '<label class="fld">Note</label>'
+    + '<input type="text" id="' + type + '-note" placeholder="optional" autocomplete="off">'
+    + '<div class="row" style="margin-top:13px">'
+    + '<button class="btn ghost" onclick="closePref(\'' + type + '\')">Cancel</button>'
+    + '<button class="btn" onclick="savePref(\'' + type + '\')">Save</button></div></div>';
+  el.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+function closePref(type){ document.getElementById(type + "-form").innerHTML = ""; }
+function toggleCtx(row){ row.querySelector(".ctx-cb").classList.toggle("on"); }
+function toggleAllCtx(type){
+  var rows = document.querySelectorAll("#" + type + "-inner .ctx-cb");
+  var allOn = [...rows].every(c => c.classList.contains("on"));
+  rows.forEach(c => c.classList.toggle("on", !allOn));
+}
+function savePref(type){
+  var m = me(); if(!m) return;
+  var food = document.getElementById(type + "-food").value.trim();
+  if(!food){ toast("Which food?"); return; }
+  var contexts = [...document.querySelectorAll("#" + type + "-inner .ctx-row")]
+    .filter(r => r.querySelector(".ctx-cb").classList.contains("on")).map(r => r.dataset.id);
+  var note = document.getElementById(type + "-note").value.trim();
+  (type === "like" ? m.likes : m.dislikes).push({id:uid(), food:food, contexts:contexts, note:note});
+  closePref(type); save(); renderPrefs(type);
+}
+function delPref(type, pid){
+  var m = me(); if(!m) return;
+  if(type === "like") m.likes = m.likes.filter(p => p.id !== pid);
+  else m.dislikes = m.dislikes.filter(p => p.id !== pid);
+  save(); renderPrefs(type);
+}
+function renderPrefs(type){
+  var m = me(); if(!m) return;
+  var arr = type === "like" ? m.likes : m.dislikes;
+  var el = document.getElementById(type === "like" ? "likes-list" : "dislikes-list");
+  if(!arr.length){
+    el.innerHTML = '<div class="empty" style="padding:16px">Nothing recorded.</div>'; return;
+  }
+  el.innerHTML = arr.map(p =>
+    '<div class="list-item"><div class="grow"><div class="nm">' + esc(p.food) + '</div>'
+    + '<div class="mt">' + esc(p.contexts.length ? p.contexts.map(ctxLabel).join(", ") : "always")
+    + (p.note ? " — " + esc(p.note) : "") + '</div></div>'
+    + '<button class="xdel" onclick="delPref(\'' + type + '\',\'' + p.id + '\')" aria-label="Remove">×</button></div>').join("");
+}
+
+/* ═══ APPEARANCE ═══════════════════════════════════════════
+   Five presets, each with a light and a dark palette.
+   Auto follows the phone and switches live on a schedule.
+   ═════════════════════════════════════════════════════════ */
+function resolvedMode(){
+  if(S.mode === "light" || S.mode === "dark") return S.mode;
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+}
+function applyTheme(){
+  var t = THEMES[S.theme] || THEMES.pine;
+  var m = resolvedMode(), p = t[m];
+  var r = document.documentElement.style;
+  r.setProperty("--bg", p.bg);                 r.setProperty("--card", p.card);
+  r.setProperty("--ink", p.ink);               r.setProperty("--muted", p.muted);
+  r.setProperty("--line", p.line);             r.setProperty("--accent", p.accent);
+  r.setProperty("--accent-ink", p.accentInk);  r.setProperty("--accent-soft", p.accentSoft);
+  r.setProperty("--ok", p.ok);                 r.setProperty("--ok-ink", p.okInk);
+  r.setProperty("--warn", p.warn);             r.setProperty("--warn-ink", p.warnInk);
+  r.setProperty("--danger", p.danger);
+  document.body.classList.toggle("dark", m === "dark");
+  var tc = document.getElementById("tc");
+  if(tc) tc.setAttribute("content", p.accent);
+}
+function setTheme(k){ S.theme = k; save(); applyTheme(); renderAppearance(); }
+function setColourMode(k){ S.mode = k; save(); applyTheme(); renderAppearance(); }
+function renderAppearance(){
+  var m = resolvedMode();
+  document.getElementById("theme-chips").innerHTML = THEME_ORDER.map(k => {
+    var p = THEMES[k][m];
+    return '<button class="sw' + (k === S.theme ? " on" : "") + '"'
+      + ' aria-label="' + esc(THEMES[k].label) + '"'
+      + ' style="background:linear-gradient(135deg,' + p.accent + ' 0 50%,' + p.bg + ' 50% 100%)"'
+      + ' onclick="setTheme(\'' + k + '\')"></button>';
+  }).join("");
+  document.getElementById("theme-name").textContent =
+    (THEMES[S.theme] || THEMES.pine).label + " · "
+    + (S.mode === "auto" ? "following your phone (" + m + " now)" : S.mode);
+  document.getElementById("mode-chips").innerHTML =
+    [["light","Light"],["dark","Dark"],["auto","Auto"]].map(function(x){
+      return '<div class="chip' + (S.mode === x[0] ? " on" : "") + '" onclick="setColourMode(\'' + x[0] + '\')">' + x[1] + '</div>';
+    }).join("");
+}
+
+/* ═══ SETTINGS ═════════════════════════════════════════════ */
+function renderSettings(){
+  renderAppearance();
+  var ws = document.getElementById("set-weekstart");
+  ws.innerHTML = DAYS.map(d => '<option' + (d===S.weekStart?" selected":"") + '>' + d + '</option>').join("");
+  document.getElementById("set-slots").innerHTML = ALL_SLOTS.map(sl =>
+    '<div class="chip' + (S.slots.includes(sl)?" on":"") + '" onclick="toggleSlot2(\'' + esc(sl) + '\')">' + esc(sl) + '</div>').join("");
+  document.getElementById("set-key").value = S.apiKey || "";
+  document.getElementById("key-state").textContent = haveKey()
+    ? "Key saved on this device."
+    : "No key yet — the planner works without one, but Claude suggestions and cookbook scanning won't.";
+  document.getElementById("ver").textContent = "Version " + VERSION;
+}
+function applySettings(){
+  S.weekStart = document.getElementById("set-weekstart").value;
+  S.dayIdx = 0; save(); updateBadge();
+}
+function toggleSlot2(sl){
+  if(S.slots.includes(sl)) S.slots = S.slots.filter(x => x !== sl);
+  else{
+    if(S.slots.length >= 5){ toast("Five meals is the limit"); return; }
+    S.slots = ALL_SLOTS.filter(x => S.slots.includes(x) || x === sl);
+  }
+  save(); renderSettings();
+}
+function saveKey(){
+  var v = document.getElementById("set-key").value.trim();
+  S.apiKey = v; save(); renderSettings();
+  toast(v ? "Key saved on this device" : "Key removed");
+}
+function clearKey(){
+  S.apiKey = ""; document.getElementById("set-key").value = "";
+  save(); renderSettings(); toast("Key removed");
+}
+
+/* ── menu text ── */
+function menuText(){
+  var out = ["MENU — week of " + fmtDate(weekStartDate()), ""];
+  orderedDays().forEach((day, i) => {
+    var cells = S.plan[day]; if(!cells) return;
+    var lines = [];
+    ALL_SLOTS.forEach(sl => { if(cells[sl] && cells[sl].chosen) lines.push("  " + sl + ": " + cells[sl].chosen.title); });
+    if(lines.length) out.push(day + " " + fmtDate(dayDate(i)), ...lines, "");
+  });
+  return out.length > 2 ? out.join("\n").trim() : "Nothing planned yet.";
+}
+function copyText(text, msg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => toast(msg)).catch(() => fallbackCopy(text, msg));
+  } else fallbackCopy(text, msg);
+}
+function fallbackCopy(text, msg){
+  var t = document.createElement("textarea");
+  t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+  document.body.appendChild(t); t.select();
+  try{ document.execCommand("copy"); toast(msg); }catch(e){ toast("Couldn't copy"); }
+  document.body.removeChild(t);
+}
+function copyMenu(){ copyText(menuText(), "Menu copied"); }
+function shareMenu(){ window.open("sms:?&body=" + encodeURIComponent(menuText())); }
+
+/* ── backup ── */
+function exportData(){
+  var out = JSON.parse(JSON.stringify(S));
+  delete out.apiKey;                       // never leaves the device in a backup file
+  var blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "meal-planner-backup-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Backup saved — the API key is not included");
+}
+function importData(ev){
+  var f = ev.target.files[0]; if(!f) return;
+  var r = new FileReader();
+  r.onload = e => {
+    try{
+      var d = JSON.parse(e.target.result);
+      if(!d.members) throw new Error("shape");
+      var key = S.apiKey;
+      S = blankState();
+      Object.keys(blankState()).forEach(k => { if(d[k] !== undefined) S[k] = d[k]; });
+      S.apiKey = key;
+      if(!S.stores || !S.stores.length){
+        S.stores = [{id:"default", name:"My shop", aisles:defaultAisles()}];
+        S.activeStore = "default";
+      }
+      save(); applyTheme(); goTab("plan"); toast("Backup restored");
+    }catch(err){ toast("That file didn't look like a backup"); }
+  };
+  r.readAsText(f); ev.target.value = "";
+}
+function wipeWeek(){
+  if(!confirm("Clear every meal chosen for this week?")) return;
+  S.plan = {}; S.shop = S.shop.filter(i => i.manual);
+  openSlots.clear(); save(); goTab("plan"); toast("Week cleared");
+}
+function wipeAll(){
+  if(!confirm("Erase everything — household, recipes, cupboard, plan?")) return;
+  if(!confirm("Really? This can't be undone.")) return;
+  var keep = {apiKey:S.apiKey, theme:S.theme, mode:S.mode};
+  S = blankState();
+  S.apiKey = keep.apiKey; S.theme = keep.theme; S.mode = keep.mode;
+  openSlots.clear(); currentMember = null;
+  save(); applyTheme(); goTab("plan"); toast("Everything erased");
+}
+
+/* ═══ INIT ═════════════════════════════════════════════════ */
+(function init(){
+  try{
+    load();
+    applyTheme();
+    if(window.matchMedia){
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      var onScheme = function(){ if(S.mode === "auto") applyTheme(); };
+      mq.addEventListener ? mq.addEventListener("change", onScheme) : mq.addListener(onScheme);
+    }
+    document.getElementById("mr-cat").innerHTML =
+      RECIPE_CATS.map(c => '<option>' + c + '</option>').join("");
+    updateBadge();
+    goTab("plan");
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  }catch(e){
+    document.body.innerHTML = '<div style="padding:24px;font-family:-apple-system,sans-serif">'
+      + '<h2 style="margin-bottom:10px">Something went wrong starting up</h2>'
+      + '<pre style="white-space:pre-wrap;font-size:12px;color:#A32D2D">' + String(e && e.stack || e) + '</pre></div>';
+  }
+})();
+</script>
+</body>
+</html>
