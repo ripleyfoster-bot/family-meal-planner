@@ -1914,6 +1914,49 @@ function renderPrefs(type){
   }).join("");
 }
 
+/* ═══ APPEARANCE ═══════════════════════════════════════════
+   Five presets, each with a light and a dark palette.
+   Auto follows the phone and switches live on a schedule.
+   ═════════════════════════════════════════════════════════ */
+function resolvedMode(){
+  if(S.mode === "light" || S.mode === "dark") return S.mode;
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+}
+function applyTheme(){
+  var t = THEMES[S.theme] || THEMES.pine;
+  var m = resolvedMode(), p = t[m];
+  var r = document.documentElement.style;
+  r.setProperty("--bg", p.bg);                 r.setProperty("--card", p.card);
+  r.setProperty("--ink", p.ink);               r.setProperty("--muted", p.muted);
+  r.setProperty("--line", p.line);             r.setProperty("--accent", p.accent);
+  r.setProperty("--accent-ink", p.accentInk);  r.setProperty("--accent-soft", p.accentSoft);
+  r.setProperty("--ok", p.ok);                 r.setProperty("--ok-ink", p.okInk);
+  r.setProperty("--warn", p.warn);             r.setProperty("--warn-ink", p.warnInk);
+  r.setProperty("--danger", p.danger);
+  document.body.classList.toggle("dark", m === "dark");
+  var tc = document.getElementById("tc");
+  if(tc) tc.setAttribute("content", p.accent);
+}
+function setTheme(k){ S.theme = k; save(); applyTheme(); renderAppearance(); }
+function setColourMode(k){ S.mode = k; save(); applyTheme(); renderAppearance(); }
+function renderAppearance(){
+  var m = resolvedMode();
+  document.getElementById("theme-chips").innerHTML = THEME_ORDER.map(function(k){
+    var p = THEMES[k][m];
+    return '<button class="sw' + (k === S.theme ? " on" : "") + '"'
+      + ' aria-label="' + esc(THEMES[k].label) + '"'
+      + ' style="background:linear-gradient(135deg,' + p.accent + ' 0 50%,' + p.bg + ' 50% 100%)"'
+      + ' onclick="setTheme(\'' + k + '\')"></button>';
+  }).join("");
+  document.getElementById("theme-name").textContent =
+    (THEMES[S.theme] || THEMES.pine).label + " · "
+    + (S.mode === "auto" ? "following your phone (" + m + " now)" : S.mode);
+  document.getElementById("mode-chips").innerHTML =
+    [["light","Light"],["dark","Dark"],["auto","Auto"]].map(function(x){
+      return '<div class="chip' + (S.mode === x[0] ? " on" : "") + '" onclick="setColourMode(\'' + x[0] + '\')">' + x[1] + '</div>';
+    }).join("");
+}
+
 /* ═══ SETTINGS ═════════════════════════════════════════════ */
 function renderSettings(){
   renderAppearance();
