@@ -85,13 +85,20 @@ label.fld:first-child{margin-top:0;}
   cursor:pointer;user-select:none;white-space:nowrap;}
 .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
-.sw{width:30px;height:30px;border-radius:50%;padding:0;border:2px solid var(--line);flex-shrink:0;cursor:pointer;}
-.sw.on{border-color:var(--ink);border-width:3px;}
+.swatch{width:30px;height:30px;border-radius:50%;padding:0;border:2px solid var(--line);flex-shrink:0;cursor:pointer;}
+.swatch.on{border-color:var(--ink);border-width:3px;}
 
 .badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:600;
   background:var(--accent-soft);color:var(--accent);}
 body.dark .badge{color:var(--ink);}
 .badge.sig-ok{background:var(--ok);color:var(--ok-ink);}
+.badge.b-sw{background:var(--ok);color:var(--ok-ink);}
+.badge.b-lc{background:var(--accent);color:var(--accent-ink);}
+.badge.b-fast{background:var(--warn);color:var(--warn-ink);}
+.badge.b-treat{background:var(--warn);color:var(--warn-ink);}
+.badge.b-own{background:var(--line);color:var(--muted);}
+.badge.b-std{background:var(--accent-soft);color:var(--accent);}
+body.dark .badge.b-std{color:var(--ink);}
 
 .avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:11.5px;font-weight:600;color:#fff;flex-shrink:0;}
@@ -486,7 +493,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.7";
+var VERSION = "2026.08.8";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -865,7 +872,7 @@ function slotBody(day, slot, cell, eating){
   if(cell.chosen){
     var c = cell.chosen;
     h += '<div class="sug picked" style="margin-top:11px"><div class="st">' + esc(c.title) + '</div>'
-       + (c.why ? '<div class="sw">' + esc(c.why) + '</div>' : "")
+       + (c.why ? '<div class="sy">' + esc(c.why) + '</div>' : "")
        + '<div class="ss">' + esc(c.source || "") + (c.link ? ' · <a href="' + esc(c.link) + '" target="_blank" rel="noopener">Open</a>' : "") + '</div>'
        + '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">'
        + '<button class="mini" onclick="event.stopPropagation();unchoose(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Change meal</button>'
@@ -885,7 +892,7 @@ function slotBody(day, slot, cell, eating){
   (cell.suggestions || []).forEach((s, i) => {
     h += '<div class="sug" onclick="event.stopPropagation();choose(\'' + esc(day) + '\',\'' + esc(slot) + '\',' + i + ')">'
        + '<div class="st">' + (s.is_standard ? "★ " : "") + esc(s.title) + '</div>'
-       + (s.why ? '<div class="sw">' + esc(s.why) + '</div>' : "")
+       + (s.why ? '<div class="sy">' + esc(s.why) + '</div>' : "")
        + '<div class="ss">' + esc(s.source || "")
        + (s.buy && s.buy.length ? " · " + s.buy.length + " to buy" : "") + '</div></div>';
   });
@@ -2376,7 +2383,7 @@ function renderAppearance(){
   var m = resolvedMode();
   document.getElementById("theme-chips").innerHTML = THEME_ORDER.map(function(k){
     var p = THEMES[k][m];
-    return '<button class="sw' + (k === S.theme ? " on" : "") + '"'
+    return '<button class="swatch' + (k === S.theme ? " on" : "") + '"'
       + ' aria-label="' + esc(THEMES[k].label) + '"'
       + ' style="background:linear-gradient(135deg,' + p.accent + ' 0 50%,' + p.bg + ' 50% 100%)"'
       + ' onclick="setTheme(\'' + k + '\')"></button>';
