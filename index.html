@@ -444,7 +444,7 @@ body.dark .rmeta span{color:var(--ink);}
 
   <div class="sec-hd">Storage</div>
   <div class="card">
-    <div class="hint" id="storage-state">—</div>
+    <div class="hint" id="storage-state" style="white-space:pre-line">—</div>
     <div style="height:8px;background:var(--line);border-radius:5px;margin-top:9px;overflow:hidden">
       <div id="storage-bar" style="height:100%;width:0;background:var(--accent)"></div>
     </div>
@@ -457,6 +457,9 @@ body.dark .rmeta span{color:var(--ink);}
       <button class="btn ghost sm" onclick="exportData()">Export</button>
       <button class="btn ghost sm" onclick="document.getElementById('import-in').click()">Import</button>
     </div>
+    <button class="btn wide ghost sm" style="margin-top:8px" onclick="exportFull()">Export including photos</button>
+    <div class="hint" style="margin-top:8px">The plain export is small and quick. The one with photos is
+      much larger but is the only version that carries your recipe pictures to another device.</div>
     <input type="file" id="import-in" accept=".json" hidden onchange="importData(event)">
   </div>
 
@@ -483,7 +486,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.5";
+var VERSION = "2026.08.6";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1297,8 +1300,14 @@ function confirmScan(){
     prepMins:scanResult.prepMins || null, cookMins:scanResult.cookMins || null,
     ingredients:scanResult.ingredients || [],
     steps:scanResult.steps || (scanResult.method ? [scanResult.method] : []),
-    notes:"", photo:scanPhoto || "",
+    notes:"", photo:"", hasPhoto:false,
     source:"Scanned", link:""});
+  if(scanPhoto){
+    var newId = S.recipes[S.recipes.length - 1].id;
+    savePhoto(newId, scanPhoto).then(function(){
+      S.recipes[S.recipes.length - 1].hasPhoto = true; save(); renderRecipes();
+    }).catch(function(){});
+  }
   (scanResult.ingredients || []).forEach(function(g){ learnFood(g.name || g, {use:"recipe"}); });
   cancelScan(); refreshFoodOptions(); save(); renderRecipes(); toast("Recipe saved");
 }
@@ -1331,6 +1340,7 @@ function saveManualRecipe(){
 function delRecipe(id){
   if(!confirm("Delete this recipe?")) return;
   S.recipes = S.recipes.filter(r => r.id !== id);
+  deletePhoto(id);
   save();
   if(currentRecipe === id) closeRecipe(); else renderRecipes();
 }
@@ -1349,7 +1359,7 @@ function renderRecipes(){
       if(totalMins(r)) bits.push(fmtMins(totalMins(r)));
       if((r.steps||[]).length) bits.push((r.steps||[]).length + " steps");
       html += '<div class="list-item" onclick="openRecipe(\'' + r.id + '\')">'
-        + (r.photo ? '<img src="' + r.photo + '" style="width:42px;height:42px;object-fit:cover;border-radius:8px;flex-shrink:0">' : "")
+        + ((r.hasPhoto || r.photo) ? '<img data-photo="' + r.id + '" src="' + (r.photo || "") + '" style="width:42px;height:42px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--accent-soft)">' : "")
         + '<div class="grow"><div class="nm">' + esc(r.title) + '</div>'
         + '<div class="mt">' + esc(bits.join(" · ")) + '</div></div>'
         + '<span class="badge ' + catBadge(cat) + '">' + esc(cat.split(" ")[0]) + '</span>'
@@ -1783,7 +1793,9 @@ function openRecipe(id){
   if(totalMins(r)) meta.push(fmtMins(totalMins(r)) + " total");
 
   el.innerHTML = '<div class="backlink" onclick="closeRecipe()">‹ Recipes</div>'
-    + (r.photo ? '<img class="rphoto" src="' + r.photo + '" alt="' + esc(r.title) + '" style="margin-bottom:12px">' : "")
+    + (r.hasPhoto || r.photo
+        ? '<img class="rphoto" data-photo="' + r.id + '" src="' + (r.photo || "") + '" alt="' + esc(r.title) + '" style="margin-bottom:12px">'
+        : "")
     + '<div class="card"><h2>' + esc(r.title) + '</h2>'
     + '<div class="hint">' + esc(r.category) + (r.source ? ' · ' + esc(r.source) : "") + '</div>'
     + (meta.length ? '<div class="rmeta">' + meta.map(m => '<span>' + esc(m) + '</span>').join("") + '</div>' : "")
@@ -1811,7 +1823,9 @@ function openRecipe(id){
     + '<button class="btn ghost" onclick="document.getElementById(\'rphoto-in\').click()">'
     + (r.photo ? "Change photo" : "Add photo") + '</button></div>'
     + '<input type="file" id="rphoto-in" accept="image/*" hidden onchange="setRecipePhoto(event)">'
+    + ((r.hasPhoto || r.photo) ? '<button class="btn wide ghost sm" style="margin-top:9px" onclick="removePhoto(\'' + r.id + '\')">Remove photo</button>' : "")
     + '<button class="btn wide danger" style="margin-top:9px" onclick="delRecipe(\'' + r.id + '\')">Delete recipe</button>';
+  hydratePhotos(el, false);
   document.querySelector(".view:not([hidden])").scrollTop = 0;
 }
 function closeRecipe(){
@@ -1902,36 +1916,54 @@ function downscale(file, maxPx, quality){
 function setRecipePhoto(ev){
   var f = ev.target.files[0]; ev.target.value = "";
   if(!f || !currentRecipe) return;
-  var r = S.recipes.find(x => x.id === currentRecipe); if(!r) return;
+  var id = currentRecipe;
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
   toast("Shrinking the photo…");
-  downscale(f, 900, 0.65).then(function(dataUrl){
-    var prev = r.photo;
-    r.photo = dataUrl;
-    try{
-      localStorage.setItem(STORE_KEY, JSON.stringify(S));
-      openRecipe(currentRecipe);
+  downscale(f, 1200, 0.7).then(function(dataUrl){
+    return savePhoto(id, dataUrl).then(function(){
+      r.hasPhoto = true; r.photo = "";
+      save(); openRecipe(id);
       toast("Photo saved (" + Math.round(dataUrl.length / 1024) + "KB)");
-    }catch(err){
-      r.photo = prev;
-      toast("No room left — remove a photo or two first");
-    }
-  }).catch(function(){ toast("Couldn't read that image"); });
+    });
+  }).catch(function(){ toast("Couldn't save that photo — storage may be full"); });
+}
+function removePhoto(id){
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
+  if(!confirm("Remove the photo from " + r.title + "?")) return;
+  deletePhoto(id).then(function(){
+    r.hasPhoto = false; r.photo = "";
+    save(); openRecipe(id); renderStorage();
+  });
 }
 
 /* ── storage meter ── */
 function storageUsed(){
   try{ return (localStorage.getItem(STORE_KEY) || "").length; }catch(e){ return 0; }
 }
+function fmtBytes(n){
+  if(n < 1024) return n + "B";
+  if(n < 1024 * 1024) return Math.round(n / 1024) + "KB";
+  return (n / 1024 / 1024).toFixed(1) + "MB";
+}
 function renderStorage(){
-  var used = storageUsed(), cap = 5 * 1024 * 1024;   // Safari's usual per-site allowance
-  var pct = Math.min(100, (used / cap) * 100);
-  var photos = S.recipes.filter(r => r.photo).length;
-  document.getElementById("storage-state").textContent =
-    Math.round(used / 1024) + "KB of about 5MB used · " + S.recipes.length + " recipes, "
-    + photos + " with photos" + (pct > 80 ? " — running low" : "");
-  var bar = document.getElementById("storage-bar");
-  bar.style.width = pct.toFixed(1) + "%";
-  bar.style.background = pct > 85 ? "var(--danger)" : "var(--accent)";
+  var el = document.getElementById("storage-state"), bar = document.getElementById("storage-bar");
+  var photos = S.recipes.filter(r => r.hasPhoto || r.photo).length;
+  var textKB = Math.round(storageUsed() / 1024);
+  var base = S.recipes.length + " recipes, " + photos + " with photos · " + textKB + "KB of text";
+  el.textContent = base;
+  bar.style.width = "0%";
+  /* The browser can tell us the real figures, so use them rather than a guess. */
+  if(navigator.storage && navigator.storage.estimate){
+    navigator.storage.estimate().then(function(est){
+      var used = est.usage || 0, quota = est.quota || 0;
+      if(!quota) return;
+      var pct = Math.min(100, (used / quota) * 100);
+      el.textContent = base + "\n" + fmtBytes(used) + " of " + fmtBytes(quota)
+        + " available (" + pct.toFixed(1) + "%)";
+      bar.style.width = Math.max(1, pct).toFixed(1) + "%";
+      bar.style.background = pct > 85 ? "var(--danger)" : "var(--accent)";
+    }).catch(function(){});
+  }
 }
 
 /* Same shrink as a file upload, but starting from a data URL. */
@@ -1947,6 +1979,112 @@ function shrinkDataUrl(dataUrl, maxPx, quality){
       resolve(c.toDataURL("image/jpeg", quality));
     };
     img.src = dataUrl;
+  });
+}
+
+/* ═══ PHOTO STORE (IndexedDB) ══════════════════════════════
+   localStorage is fixed at about 5MB and photos filled it in
+   thirteen recipes. IndexedDB has its own, far larger budget,
+   so images live here and only a flag stays in the main data.
+
+     photos   id        -> full image (1200px)
+     photos   id:thumb  -> list thumbnail (240px)
+   ═════════════════════════════════════════════════════════ */
+var PHOTO_DB = "fmp-photos", PHOTO_STORE = "photos", _db = null;
+
+function idb(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise(function(resolve, reject){
+    var req = indexedDB.open(PHOTO_DB, 1);
+    req.onupgradeneeded = function(){
+      if(!req.result.objectStoreNames.contains(PHOTO_STORE)) req.result.createObjectStore(PHOTO_STORE);
+    };
+    req.onsuccess = function(){ _db = req.result; resolve(_db); };
+    req.onerror = function(){ reject(req.error || new Error("idb")); };
+  });
+}
+function idbPut(key, val){
+  return idb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction([PHOTO_STORE], "readwrite");
+      tx.objectStore(PHOTO_STORE).put(val, key);
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = tx.onabort = function(){ reject(tx.error || new Error("quota")); };
+    });
+  });
+}
+function idbGet(key){
+  return idb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var r = db.transaction([PHOTO_STORE], "readonly").objectStore(PHOTO_STORE).get(key);
+      r.onsuccess = function(){ resolve(r.result || null); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+function idbDel(key){
+  return idb().then(function(db){
+    return new Promise(function(resolve){
+      var tx = db.transaction([PHOTO_STORE], "readwrite");
+      tx.objectStore(PHOTO_STORE).delete(key);
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = tx.onabort = function(){ resolve(false); };
+    });
+  });
+}
+function idbKeys(){
+  return idb().then(function(db){
+    return new Promise(function(resolve){
+      var r = db.transaction([PHOTO_STORE], "readonly").objectStore(PHOTO_STORE).getAllKeys();
+      r.onsuccess = function(){ resolve(r.result || []); };
+      r.onerror = function(){ resolve([]); };
+    });
+  });
+}
+
+/* Ask the browser not to evict us when the device gets tight.
+   Safari usually grants this for a home-screen web app. */
+function requestPersistence(){
+  if(navigator.storage && navigator.storage.persist){
+    navigator.storage.persisted().then(function(already){
+      if(!already) navigator.storage.persist();
+    }).catch(function(){});
+  }
+}
+
+/* Photos saved by the earlier build sit inside the main data and
+   are what filled it. Move them across once, then free the space. */
+function migratePhotosToIDB(){
+  var inline = S.recipes.filter(function(r){ return r.photo && r.photo.length > 200; });
+  if(!inline.length) return Promise.resolve(0);
+  var jobs = inline.map(function(r){
+    return idbPut(r.id, r.photo)
+      .then(function(){ return shrinkDataUrl(r.photo, 240, 0.5); })
+      .then(function(t){ return idbPut(r.id + ":thumb", t); })
+      .then(function(){ r.photo = ""; r.hasPhoto = true; })
+      .catch(function(){ /* leave it in place rather than lose it */ });
+  });
+  return Promise.all(jobs).then(function(){
+    save();
+    return inline.filter(function(r){ return r.hasPhoto; }).length;
+  });
+}
+
+function savePhoto(id, dataUrl){
+  return idbPut(id, dataUrl)
+    .then(function(){ return shrinkDataUrl(dataUrl, 240, 0.5); })
+    .then(function(t){ return idbPut(id + ":thumb", t); });
+}
+function deletePhoto(id){ return Promise.all([idbDel(id), idbDel(id + ":thumb")]); }
+
+/* Fill in <img data-photo="id"> elements once their image loads. */
+function hydratePhotos(root, thumb){
+  var nodes = (root || document).querySelectorAll("img[data-photo]");
+  [].forEach.call(nodes, function(el){
+    var id = el.getAttribute("data-photo");
+    idbGet(thumb ? id + ":thumb" : id).then(function(src){
+      if(src) el.src = src;
+    }).catch(function(){});
   });
 }
 
@@ -2313,6 +2451,27 @@ function exportData(){
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   toast("Backup saved — the API key is not included");
 }
+/* Photos live outside the main data, so a full backup has to gather
+   them back in. Kept separate because it is far bigger and slower. */
+function exportFull(){
+  toast("Gathering photos…");
+  var out = JSON.parse(JSON.stringify(S));
+  delete out.apiKey;
+  out._photos = {};
+  var jobs = S.recipes.filter(function(r){ return r.hasPhoto; }).map(function(r){
+    return idbGet(r.id).then(function(d){ if(d) out._photos[r.id] = d; }).catch(function(){});
+  });
+  Promise.all(jobs).then(function(){
+    var json = JSON.stringify(out);
+    var blob = new Blob([json], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "meal-planner-full-" + new Date().toISOString().slice(0,10) + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+    toast("Full backup saved (" + Math.round(json.length / 1024 / 1024 * 10) / 10 + "MB)");
+  });
+}
 function importData(ev){
   var f = ev.target.files[0]; if(!f) return;
   var r = new FileReader();
@@ -2328,7 +2487,18 @@ function importData(ev){
         S.stores = [{id:"default", name:"My shop", aisles:defaultAisles()}];
         S.activeStore = "default";
       }
-      save(); applyTheme(); goTab("plan"); toast("Backup restored");
+      var photos = d._photos || {};
+      delete S._photos;
+      save(); applyTheme(); goTab("plan");
+      var ids = Object.keys(photos);
+      if(ids.length){
+        toast("Restoring " + ids.length + " photos…");
+        Promise.all(ids.map(function(id){
+          return savePhoto(id, photos[id]).catch(function(){});
+        })).then(function(){ renderRecipes(); toast("Backup restored with photos"); });
+      } else {
+        toast("Backup restored");
+      }
     }catch(err){ toast("That file didn't look like a backup"); }
   };
   r.readAsText(f); ev.target.value = "";
@@ -2355,6 +2525,10 @@ function wipeAll(){
     applyTheme();
     if(!S.foods || !Object.keys(S.foods).length) seedCatalogue();
     refreshFoodOptions();
+    requestPersistence();
+    migratePhotosToIDB().then(function(n){
+      if(n){ renderRecipes(); toast(n + " photos moved to roomier storage"); }
+    }).catch(function(){});
     if(window.matchMedia){
       var mq = window.matchMedia("(prefers-color-scheme: dark)");
       var onScheme = function(){ if(S.mode === "auto") applyTheme(); };
