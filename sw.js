@@ -1,4 +1,4 @@
-const CACHE = 'fmp-v9';
+const CACHE = 'fmp-v10';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./','./index.html'])).then(() => self.skipWaiting()));
 });

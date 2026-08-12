@@ -486,7 +486,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.6";
+var VERSION = "2026.08.7";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1368,6 +1368,7 @@ function renderRecipes(){
     html += "</div>";
   });
   el.innerHTML = html;
+  hydratePhotos(el, true);
 }
 /* ═══ SHOP LAYOUT — aisle order per shop ═══════════════════
    Different supermarkets are laid out differently, so the
@@ -2082,8 +2083,20 @@ function hydratePhotos(root, thumb){
   var nodes = (root || document).querySelectorAll("img[data-photo]");
   [].forEach.call(nodes, function(el){
     var id = el.getAttribute("data-photo");
-    idbGet(thumb ? id + ":thumb" : id).then(function(src){
-      if(src) el.src = src;
+    if(!id) return;
+    if(!thumb){
+      idbGet(id).then(function(src){ if(src) el.src = src; }).catch(function(){});
+      return;
+    }
+    /* Prefer the small version, but fall back to the full image and
+       quietly build the missing thumbnail for next time. */
+    idbGet(id + ":thumb").then(function(src){
+      if(src){ el.src = src; return; }
+      return idbGet(id).then(function(full){
+        if(!full) return;
+        el.src = full;
+        return shrinkDataUrl(full, 240, 0.5).then(function(t){ return idbPut(id + ":thumb", t); });
+      });
     }).catch(function(){});
   });
 }
