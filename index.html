@@ -451,7 +451,7 @@ body.store .tabbar{display:none;}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.3";
+var VERSION = "2026.08.4";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1771,38 +1771,76 @@ function renderAllergies(){
     : '<span class="hint">None recorded.</span>';
 }
 
-/* ── likes / dislikes with context ── */
-function openPref(type){
+/* ── likes / dislikes with context ──────────────────────────
+   One form does both add and edit. The "Applies to" chips are
+   the authoritative answer to who holds this preference: tick
+   to give it to someone, untick to take it away. That way a
+   shared dislike is entered once, not once per person.
+   ───────────────────────────────────────────────────────── */
+var editingPref = null;
+
+function prefArr(member, type){ return type === "like" ? member.likes : member.dislikes; }
+function membersWith(type, key){
+  return S.members.filter(m => (prefArr(m, type) || []).some(p => normalise(p.food) === key)).map(m => m.id);
+}
+
+function openPref(type, prefId){
+  var m = me(); if(!m) return;
+  var existing = prefId ? (prefArr(m, type) || []).find(p => p.id === prefId) : null;
+  editingPref = existing ? {type:type, id:prefId, key:normalise(existing.food)} : null;
+
+  var food = existing ? existing.food : "";
+  var note = existing ? existing.note || "" : "";
+  var ctx  = existing ? (existing.contexts || []) : [];
+  var who  = existing ? membersWith(type, normalise(existing.food)) : [currentMember];
+
   var el = document.getElementById(type + "-form");
   el.innerHTML = '<div class="card" id="' + type + '-inner">'
     + '<label class="fld">Food</label>'
-    + '<input type="text" id="' + type + '-food" list="food-options" placeholder="e.g. mushrooms" autocomplete="off">'
-    + '<label class="fld">Applies to</label>'
+    + '<input type="text" id="' + type + '-food" list="food-options" value="' + esc(food) + '"'
+    + ' placeholder="e.g. mushrooms" autocomplete="off">'
+    + '<label class="fld">Applies to <span style="font-weight:400;opacity:.6">tap to add or remove</span></label>'
     + '<div class="chips" id="' + type + '-who">'
-    + S.members.map(function(m){
-        return '<div class="chip' + (m.id === currentMember ? " on" : "") + '" data-mid="' + m.id + '"'
-             + ' onclick="this.classList.toggle(\'on\')">' + esc(m.name) + '</div>'; }).join("")
+    + S.members.map(function(x){
+        return '<div class="chip' + (who.includes(x.id) ? " on" : "") + '" data-mid="' + x.id + '"'
+             + ' onclick="this.classList.toggle(\'on\')">' + esc(x.name) + '</div>'; }).join("")
     + '</div>'
-    + '<label class="fld">When? <span style="font-weight:400;color:var(--n-400)">Leave blank for always</span></label>'
+    + '<label class="fld">When? <span style="font-weight:400;opacity:.6">Leave blank for always</span></label>'
     + '<div class="chip" style="margin-bottom:4px" onclick="toggleAllCtx(\'' + type + '\')">Select all</div>'
-    + CTX_SECTIONS.map(s => '<div class="ctx-sec"><h4>' + esc(s.title) + '</h4>'
-        + s.items.map(i => '<div class="ctx-row" onclick="toggleCtx(this)" data-id="' + i.id + '">'
-            + '<div class="ctx-cb"></div><div><div class="cl">' + esc(i.label) + '</div>'
-            + '<div class="cd">' + esc(i.desc) + '</div></div></div>').join("")
-        + '</div>').join("")
+    + CTX_SECTIONS.map(function(s){
+        return '<div class="ctx-sec"><h4>' + esc(s.title) + '</h4>'
+          + s.items.map(function(i){
+              return '<div class="ctx-row" onclick="toggleCtx(this)" data-id="' + i.id + '">'
+                + '<div class="ctx-cb' + (ctx.includes(i.id) ? " on" : "") + '">' + (ctx.includes(i.id) ? "✓" : "") + '</div>'
+                + '<div><div class="cl">' + esc(i.label) + '</div>'
+                + '<div class="cd">' + esc(i.desc) + '</div></div></div>'; }).join("")
+          + '</div>'; }).join("")
     + '<label class="fld">Note</label>'
-    + '<input type="text" id="' + type + '-note" placeholder="optional" autocomplete="off">'
+    + '<input type="text" id="' + type + '-note" value="' + esc(note) + '" placeholder="optional" autocomplete="off">'
     + '<div class="row" style="margin-top:13px">'
     + '<button class="btn ghost" onclick="closePref(\'' + type + '\')">Cancel</button>'
-    + '<button class="btn" onclick="savePref(\'' + type + '\')">Save</button></div></div>';
+    + '<button class="btn" onclick="savePref(\'' + type + '\')">' + (existing ? "Update" : "Save") + '</button></div>'
+    + (existing ? '<button class="btn wide danger sm" style="margin-top:9px" onclick="delPref(\''
+        + type + '\',\'' + prefId + '\')">Remove from everyone</button>' : "")
+    + '</div>';
   el.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
-function closePref(type){ document.getElementById(type + "-form").innerHTML = ""; }
-function toggleCtx(row){ row.querySelector(".ctx-cb").classList.toggle("on"); }
+function closePref(type){
+  editingPref = null;
+  document.getElementById(type + "-form").innerHTML = "";
+}
+function toggleCtx(row){
+  var cb = row.querySelector(".ctx-cb");
+  cb.classList.toggle("on");
+  cb.textContent = cb.classList.contains("on") ? "✓" : "";
+}
 function toggleAllCtx(type){
   var rows = document.querySelectorAll("#" + type + "-inner .ctx-cb");
   var allOn = [...rows].every(c => c.classList.contains("on"));
-  rows.forEach(c => c.classList.toggle("on", !allOn));
+  rows.forEach(function(c){
+    c.classList.toggle("on", !allOn);
+    c.textContent = c.classList.contains("on") ? "✓" : "";
+  });
 }
 function savePref(type){
   var m = me(); if(!m) return;
@@ -1812,25 +1850,51 @@ function savePref(type){
     .filter(r => r.querySelector(".ctx-cb").classList.contains("on")).map(r => r.dataset.id);
   var note = document.getElementById(type + "-note").value.trim();
   var who = [...document.querySelectorAll("#" + type + "-who .chip.on")].map(c => c.dataset.mid);
-  if(!who.length) who = [m.id];
-  var key = normalise(food);
-  var n = 0;
-  who.forEach(function(mid){
-    var p = S.members.find(x => x.id === mid); if(!p) return;
-    var arr = type === "like" ? p.likes : p.dislikes;
-    if(arr.some(x => normalise(x.food) === key)) return;   // already recorded for them
-    arr.push({id:uid(), food:food, contexts:contexts.slice(), note:note});
-    n++;
+
+  /* An edit that leaves nobody selected is a removal, so confirm it. */
+  if(!who.length){
+    if(!editingPref){ toast("Choose at least one person"); return; }
+    if(!confirm("Nobody selected — remove this " + type + " entirely?")) return;
+  }
+
+  var oldKey = editingPref ? editingPref.key : normalise(food);
+  var added = 0, updated = 0, removed = 0;
+
+  S.members.forEach(function(x){
+    var arr = prefArr(x, type);
+    var idx = arr.findIndex(p => normalise(p.food) === oldKey);
+    if(who.includes(x.id)){
+      if(idx === -1){ arr.push({id:uid(), food:food, contexts:contexts.slice(), note:note}); added++; }
+      else{ arr[idx].food = food; arr[idx].contexts = contexts.slice(); arr[idx].note = note; updated++; }
+    } else if(idx !== -1){
+      arr.splice(idx, 1); removed++;
+    }
   });
+
   learnFood(food, {use:"pref"});
-  closePref(type); refreshFoodOptions(); save(); renderPrefs(type);
-  if(who.length > 1) toast("Added for " + n + " of " + who.length + " selected");
+  closePref(type); refreshFoodOptions(); save(); renderMemberDetail();
+  var bits = [];
+  if(added) bits.push(added + " added");
+  if(updated) bits.push(updated + " updated");
+  if(removed) bits.push(removed + " removed");
+  toast(bits.join(", ") || "No change");
 }
 function delPref(type, pid){
   var m = me(); if(!m) return;
-  if(type === "like") m.likes = m.likes.filter(p => p.id !== pid);
-  else m.dislikes = m.dislikes.filter(p => p.id !== pid);
-  save(); renderPrefs(type);
+  var arr = prefArr(m, type);
+  var p = arr.find(x => x.id === pid); if(!p) return;
+  var key = normalise(p.food);
+  var holders = membersWith(type, key);
+  var msg = holders.length > 1
+    ? "Remove " + p.food + " for all " + holders.length + " people who have it?"
+    : "Remove " + p.food + "?";
+  if(!confirm(msg)) return;
+  S.members.forEach(function(x){
+    var a = prefArr(x, type);
+    var i = a.findIndex(q => normalise(q.food) === key);
+    if(i !== -1) a.splice(i, 1);
+  });
+  closePref(type); save(); renderMemberDetail();
 }
 function renderPrefs(type){
   var m = me(); if(!m) return;
@@ -1839,54 +1903,15 @@ function renderPrefs(type){
   if(!arr.length){
     el.innerHTML = '<div class="empty" style="padding:16px">Nothing recorded.</div>'; return;
   }
-  el.innerHTML = arr.map(p =>
-    '<div class="list-item"><div class="grow"><div class="nm">' + esc(p.food) + '</div>'
-    + '<div class="mt">' + esc(p.contexts.length ? p.contexts.map(ctxLabel).join(", ") : "always")
-    + (p.note ? " — " + esc(p.note) : "") + '</div></div>'
-    + '<button class="xdel" onclick="delPref(\'' + type + '\',\'' + p.id + '\')" aria-label="Remove">×</button></div>').join("");
-}
-
-/* ═══ APPEARANCE ═══════════════════════════════════════════
-   Five presets, each with a light and a dark palette.
-   Auto follows the phone and switches live on a schedule.
-   ═════════════════════════════════════════════════════════ */
-function resolvedMode(){
-  if(S.mode === "light" || S.mode === "dark") return S.mode;
-  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-}
-function applyTheme(){
-  var t = THEMES[S.theme] || THEMES.pine;
-  var m = resolvedMode(), p = t[m];
-  var r = document.documentElement.style;
-  r.setProperty("--bg", p.bg);                 r.setProperty("--card", p.card);
-  r.setProperty("--ink", p.ink);               r.setProperty("--muted", p.muted);
-  r.setProperty("--line", p.line);             r.setProperty("--accent", p.accent);
-  r.setProperty("--accent-ink", p.accentInk);  r.setProperty("--accent-soft", p.accentSoft);
-  r.setProperty("--ok", p.ok);                 r.setProperty("--ok-ink", p.okInk);
-  r.setProperty("--warn", p.warn);             r.setProperty("--warn-ink", p.warnInk);
-  r.setProperty("--danger", p.danger);
-  document.body.classList.toggle("dark", m === "dark");
-  var tc = document.getElementById("tc");
-  if(tc) tc.setAttribute("content", p.accent);
-}
-function setTheme(k){ S.theme = k; save(); applyTheme(); renderAppearance(); }
-function setColourMode(k){ S.mode = k; save(); applyTheme(); renderAppearance(); }
-function renderAppearance(){
-  var m = resolvedMode();
-  document.getElementById("theme-chips").innerHTML = THEME_ORDER.map(k => {
-    var p = THEMES[k][m];
-    return '<button class="sw' + (k === S.theme ? " on" : "") + '"'
-      + ' aria-label="' + esc(THEMES[k].label) + '"'
-      + ' style="background:linear-gradient(135deg,' + p.accent + ' 0 50%,' + p.bg + ' 50% 100%)"'
-      + ' onclick="setTheme(\'' + k + '\')"></button>';
+  el.innerHTML = arr.map(function(p){
+    var shared = membersWith(type, normalise(p.food)).length;
+    return '<div class="list-item" onclick="openPref(\'' + type + '\',\'' + p.id + '\')">'
+      + '<div class="grow"><div class="nm">' + esc(p.food) + '</div>'
+      + '<div class="mt">' + esc(p.contexts.length ? p.contexts.map(ctxLabel).join(", ") : "always")
+      + (p.note ? " — " + esc(p.note) : "")
+      + (shared > 1 ? " · shared with " + (shared - 1) + " other" + (shared > 2 ? "s" : "") : "") + '</div></div>'
+      + '<span class="chev">›</span></div>';
   }).join("");
-  document.getElementById("theme-name").textContent =
-    (THEMES[S.theme] || THEMES.pine).label + " · "
-    + (S.mode === "auto" ? "following your phone (" + m + " now)" : S.mode);
-  document.getElementById("mode-chips").innerHTML =
-    [["light","Light"],["dark","Dark"],["auto","Auto"]].map(function(x){
-      return '<div class="chip' + (S.mode === x[0] ? " on" : "") + '" onclick="setColourMode(\'' + x[0] + '\')">' + x[1] + '</div>';
-    }).join("");
 }
 
 /* ═══ SETTINGS ═════════════════════════════════════════════ */
