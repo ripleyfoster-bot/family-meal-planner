@@ -184,6 +184,20 @@ body.store .tabbar{display:none;}
 .ctx-row .cl{font-size:13.5px;}
 .ctx-row .cd{font-size:11.5px;color:var(--muted);line-height:1.35;}
 
+.rphoto{width:100%;height:190px;object-fit:cover;border-radius:var(--r-md);
+  display:block;background:var(--accent-soft);}
+.rmeta{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 0;}
+.rmeta span{font-size:11.5px;background:var(--accent-soft);color:var(--accent);
+  padding:3px 9px;border-radius:20px;font-weight:500;}
+body.dark .rmeta span{color:var(--ink);}
+.step{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);}
+.step:last-child{border-bottom:none;}
+.step .no{width:23px;height:23px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step .tx{flex:1;font-size:14.5px;line-height:1.5;}
+.ing{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
+.ing:last-child{border-bottom:none;}
+.ing .q{color:var(--muted);min-width:64px;font-size:13px;}
 .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--ink);
   color:var(--bg);padding:10px 16px;border-radius:22px;font-size:13px;z-index:99;
   box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:opacity .2s;
@@ -268,6 +282,7 @@ body.store .tabbar{display:none;}
 
 <!-- ══ RECIPES ══ -->
 <div class="view" id="v-recipes" hidden>
+<div id="recipes-list">
   <div class="sec-hd">Scan from a cookbook</div>
   <div class="card">
     <div class="hint">Photograph the pages. Claude reads the title, ingredients and method into your saved recipes.</div>
@@ -287,6 +302,12 @@ body.store .tabbar{display:none;}
       <div><label class="fld">Serves</label><input type="number" id="mr-serves" value="4" min="1"></div>
       <div><label class="fld">Category</label><select id="mr-cat"></select></div>
     </div>
+    <div class="row">
+      <div><label class="fld">Prep (mins)</label><input type="number" id="mr-prep" min="0" placeholder="15"></div>
+      <div><label class="fld">Cook (mins)</label><input type="number" id="mr-cook" min="0" placeholder="30"></div>
+    </div>
+    <label class="fld">Method — one step per line</label>
+    <textarea id="mr-steps" rows="4" placeholder="Soften the onions in a little oil&#10;Brown the mince&#10;Add the tomatoes and simmer 30 mins"></textarea>
     <label class="fld">Ingredients — one per line</label>
     <textarea id="mr-ings" rows="4" placeholder="500g beef mince&#10;2 onions&#10;1 tin chopped tomatoes"></textarea>
     <label class="fld">Link or source <span style="font-weight:400;opacity:.6">(optional)</span></label>
@@ -295,6 +316,9 @@ body.store .tabbar{display:none;}
   </div>
   <div class="sec-hd">Saved recipes</div>
   <div id="recipe-groups"></div>
+</div>
+
+<div id="recipe-detail" hidden></div>
 </div>
 
 <!-- ══ SHOP ══ -->
@@ -418,6 +442,14 @@ body.store .tabbar{display:none;}
     </div>
   </div>
 
+  <div class="sec-hd">Storage</div>
+  <div class="card">
+    <div class="hint" id="storage-state">—</div>
+    <div style="height:8px;background:var(--line);border-radius:5px;margin-top:9px;overflow:hidden">
+      <div id="storage-bar" style="height:100%;width:0;background:var(--accent)"></div>
+    </div>
+  </div>
+
   <div class="sec-hd">Backup</div>
   <div class="card">
     <div class="hint">Everything lives on this phone. Take a copy before clearing Safari data or changing handset.</div>
@@ -451,7 +483,7 @@ body.store .tabbar{display:none;}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.4";
+var VERSION = "2026.08.5";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1220,6 +1252,7 @@ function renderThumbs(){
   document.getElementById("scan-btn").disabled = !scanPages.length;
 }
 function removePage(i){ scanPages.splice(i,1); renderThumbs(); }
+var scanPhoto = "";
 async function runScan(){
   if(!haveKey()){ toast("Add your Claude API key in Settings first"); goTab("settings"); return; }
   var btn = document.getElementById("scan-btn");
@@ -1229,11 +1262,20 @@ async function runScan(){
     source:{type:"base64", media_type:p.type || "image/jpeg", data:p.dataUrl.split(",")[1]}
   }));
   content.push({type:"text", text:"Read this recipe from the photos."});
+  scanPhoto = "";
+  if(scanPages[0]){
+    try{ scanPhoto = await shrinkDataUrl(scanPages[0].dataUrl, 900, 0.6); }catch(e){ scanPhoto = ""; }
+  }
   try{
     var r = await callClaude(
-      "Read the recipe from the photographed cookbook pages. Return valid JSON only, no markdown:\n"
-      + '{"title":"","serves":4,"category":"","ingredients":[{"name":"","qty":"","unit":""}],"method":""}\n'
-      + 'category must be one of: ' + RECIPE_CATS.join(", ") + '. Use plain shopping names in ingredients. Keep method to a brief summary of the steps, not a verbatim copy.',
+      "Read the recipe from the photographed pages — a cookbook, a handwritten card or a screenshot. "
+      + "Return valid JSON only, no markdown:\n"
+      + '{"title":"","serves":4,"category":"","prepMins":null,"cookMins":null,'
+      + '"ingredients":[{"name":"","qty":"","unit":""}],"steps":["",""]}\n'
+      + 'category must be one of: ' + RECIPE_CATS.join(", ") + '. '
+      + 'Use plain shopping names in ingredients — "chicken breasts", not "free-range chicken breast fillets". '
+      + 'Put each method instruction as its own entry in steps, written as a clear practical instruction for the cook. '
+      + 'prepMins and cookMins are whole minutes, or null if the page does not say.',
       content, 1600);
     scanResult = r;
     document.getElementById("scan-out").innerHTML =
@@ -1252,13 +1294,16 @@ function confirmScan(){
   S.recipes.push({id:uid(), title:scanResult.title || "Untitled",
     serves:scanResult.serves || 4,
     category:RECIPE_CATS.includes(scanResult.category) ? scanResult.category : "General eating",
-    ingredients:scanResult.ingredients || [], method:scanResult.method || "",
-    source:"Cookbook", link:""});
+    prepMins:scanResult.prepMins || null, cookMins:scanResult.cookMins || null,
+    ingredients:scanResult.ingredients || [],
+    steps:scanResult.steps || (scanResult.method ? [scanResult.method] : []),
+    notes:"", photo:scanPhoto || "",
+    source:"Scanned", link:""});
   (scanResult.ingredients || []).forEach(function(g){ learnFood(g.name || g, {use:"recipe"}); });
   cancelScan(); refreshFoodOptions(); save(); renderRecipes(); toast("Recipe saved");
 }
 function cancelScan(){
-  scanPages = []; scanResult = null;
+  scanPages = []; scanResult = null; scanPhoto = "";
   renderThumbs(); document.getElementById("scan-out").innerHTML = "";
 }
 function saveManualRecipe(){
@@ -1269,15 +1314,25 @@ function saveManualRecipe(){
   S.recipes.push({id:uid(), title:t,
     serves:parseInt(document.getElementById("mr-serves").value) || 4,
     category:document.getElementById("mr-cat").value,
-    ingredients:ings, method:"", source:document.getElementById("mr-src").value.trim(), link:""});
+    prepMins:parseInt(document.getElementById("mr-prep").value) || null,
+    cookMins:parseInt(document.getElementById("mr-cook").value) || null,
+    ingredients:ings,
+    steps:document.getElementById("mr-steps").value.split("\n").map(function(x){return x.trim();}).filter(Boolean),
+    notes:"", photo:"",
+    source:document.getElementById("mr-src").value.trim(), link:""});
   document.getElementById("mr-title").value = "";
   document.getElementById("mr-ings").value = "";
   document.getElementById("mr-src").value = "";
+  document.getElementById("mr-steps").value = "";
+  document.getElementById("mr-prep").value = "";
+  document.getElementById("mr-cook").value = "";
   save(); renderRecipes(); toast("Recipe saved");
 }
 function delRecipe(id){
   if(!confirm("Delete this recipe?")) return;
-  S.recipes = S.recipes.filter(r => r.id !== id); save(); renderRecipes();
+  S.recipes = S.recipes.filter(r => r.id !== id);
+  save();
+  if(currentRecipe === id) closeRecipe(); else renderRecipes();
 }
 function renderRecipes(){
   var el = document.getElementById("recipe-groups");
@@ -1289,11 +1344,16 @@ function renderRecipes(){
     var rs = S.recipes.filter(r => r.category === cat); if(!rs.length) return;
     html += '<div class="sec-hd">' + esc(cat) + '</div><div class="card flush">';
     rs.forEach(r => {
-      html += '<div class="list-item"><div class="grow"><div class="nm">' + esc(r.title) + '</div>'
-        + '<div class="mt">serves ' + esc(r.serves) + ' · ' + (r.ingredients||[]).length + ' ingredients'
-        + (r.source ? ' · ' + esc(r.source) : "") + '</div></div>'
+      migrateRecipe(r);
+      var bits = ["serves " + r.serves, (r.ingredients||[]).length + " ingredients"];
+      if(totalMins(r)) bits.push(fmtMins(totalMins(r)));
+      if((r.steps||[]).length) bits.push((r.steps||[]).length + " steps");
+      html += '<div class="list-item" onclick="openRecipe(\'' + r.id + '\')">'
+        + (r.photo ? '<img src="' + r.photo + '" style="width:42px;height:42px;object-fit:cover;border-radius:8px;flex-shrink:0">' : "")
+        + '<div class="grow"><div class="nm">' + esc(r.title) + '</div>'
+        + '<div class="mt">' + esc(bits.join(" · ")) + '</div></div>'
         + '<span class="badge ' + catBadge(cat) + '">' + esc(cat.split(" ")[0]) + '</span>'
-        + '<button class="xdel" onclick="delRecipe(\'' + r.id + '\')" aria-label="Delete">×</button></div>';
+        + '<span class="chev">›</span></div>';
     });
     html += "</div>";
   });
@@ -1668,6 +1728,228 @@ function forgetFood(key){
   delete S.foods[key]; save(); refreshFoodOptions(); renderFoods();
 }
 
+/* ═══ RECIPE DETAIL, EDITING & PHOTOS ══════════════════════
+   Recipes were being captured and then never shown. This adds
+   a full view with timings, numbered steps and a photo, all
+   editable. Photos are downscaled hard before storing so they
+   travel inside the normal backup rather than living apart.
+   ═════════════════════════════════════════════════════════ */
+var currentRecipe = null;
+
+function migrateRecipe(r){
+  if(!r.steps){
+    /* Older recipes kept the method as one blob of prose. */
+    var m = String(r.method || "");
+    r.steps = m
+      ? (m.indexOf("\n") !== -1
+          ? m.split(/\n+/)
+          : m.replace(/\.\s+(?=[A-Z])/g, ".\n").split(/\n+/))
+        .map(function(s){ return s.trim(); }).filter(Boolean)
+      : [];
+  }
+  if(r.prepMins === undefined) r.prepMins = null;
+  if(r.cookMins === undefined) r.cookMins = null;
+  if(r.photo === undefined) r.photo = "";
+  if(r.notes === undefined) r.notes = "";
+  return r;
+}
+function totalMins(r){
+  var a = Number(r.prepMins) || 0, b = Number(r.cookMins) || 0;
+  return a + b;
+}
+function fmtMins(n){
+  if(!n) return "";
+  if(n < 60) return n + " min";
+  var h = Math.floor(n/60), m = n % 60;
+  return h + "h" + (m ? " " + m + "m" : "");
+}
+function ingLine(g){
+  if(typeof g === "string") g = parseIngredient(g);
+  return {q:[g.qty, g.unit].filter(Boolean).join(" "), n:g.name || ""};
+}
+
+function openRecipe(id){
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
+  migrateRecipe(r);
+  currentRecipe = id;
+  document.getElementById("recipes-list").hidden = true;
+  var el = document.getElementById("recipe-detail");
+  el.hidden = false;
+
+  var meta = [];
+  if(r.serves) meta.push("Serves " + r.serves);
+  if(r.prepMins) meta.push(fmtMins(r.prepMins) + " prep");
+  if(r.cookMins) meta.push(fmtMins(r.cookMins) + " cook");
+  if(totalMins(r)) meta.push(fmtMins(totalMins(r)) + " total");
+
+  el.innerHTML = '<div class="backlink" onclick="closeRecipe()">‹ Recipes</div>'
+    + (r.photo ? '<img class="rphoto" src="' + r.photo + '" alt="' + esc(r.title) + '" style="margin-bottom:12px">' : "")
+    + '<div class="card"><h2>' + esc(r.title) + '</h2>'
+    + '<div class="hint">' + esc(r.category) + (r.source ? ' · ' + esc(r.source) : "") + '</div>'
+    + (meta.length ? '<div class="rmeta">' + meta.map(m => '<span>' + esc(m) + '</span>').join("") + '</div>' : "")
+    + (r.link ? '<div style="margin-top:10px"><a href="' + esc(r.link) + '" target="_blank" rel="noopener">Open the original</a></div>' : "")
+    + '</div>'
+
+    + '<div class="sec-hd">Ingredients</div><div class="card">'
+    + ((r.ingredients || []).length
+        ? (r.ingredients || []).map(function(g){ var l = ingLine(g);
+            return '<div class="ing"><span class="q">' + esc(l.q || "—") + '</span><span>' + esc(l.n) + '</span></div>'; }).join("")
+        : '<div class="hint">None recorded.</div>')
+    + '</div>'
+    + '<button class="btn wide ghost sm" onclick="recipeToShop(\'' + r.id + '\')">Add ingredients to shopping list</button>'
+
+    + '<div class="sec-hd">Method</div><div class="card">'
+    + ((r.steps || []).length
+        ? r.steps.map(function(s,i){
+            return '<div class="step"><div class="no">' + (i+1) + '</div><div class="tx">' + esc(s) + '</div></div>'; }).join("")
+        : '<div class="hint">No method recorded — tap Edit to add one.</div>')
+    + '</div>'
+    + (r.notes ? '<div class="sec-hd">Notes</div><div class="card"><div class="hint">' + esc(r.notes) + '</div></div>' : "")
+
+    + '<div class="row" style="margin-top:14px">'
+    + '<button class="btn ghost" onclick="editRecipe(\'' + r.id + '\')">Edit</button>'
+    + '<button class="btn ghost" onclick="document.getElementById(\'rphoto-in\').click()">'
+    + (r.photo ? "Change photo" : "Add photo") + '</button></div>'
+    + '<input type="file" id="rphoto-in" accept="image/*" hidden onchange="setRecipePhoto(event)">'
+    + '<button class="btn wide danger" style="margin-top:9px" onclick="delRecipe(\'' + r.id + '\')">Delete recipe</button>';
+  document.querySelector(".view:not([hidden])").scrollTop = 0;
+}
+function closeRecipe(){
+  currentRecipe = null;
+  document.getElementById("recipe-detail").hidden = true;
+  document.getElementById("recipes-list").hidden = false;
+  renderRecipes();
+}
+function editRecipe(id){
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
+  migrateRecipe(r);
+  var el = document.getElementById("recipe-detail");
+  el.innerHTML = '<div class="backlink" onclick="openRecipe(\'' + id + '\')">‹ Cancel</div>'
+    + '<div class="card">'
+    + '<label class="fld">Title</label><input type="text" id="er-title" value="' + esc(r.title) + '">'
+    + '<div class="row"><div><label class="fld">Serves</label>'
+    + '<input type="number" id="er-serves" min="1" value="' + esc(r.serves || 4) + '"></div>'
+    + '<div><label class="fld">Category</label><select id="er-cat">'
+    + RECIPE_CATS.map(c => '<option' + (c === r.category ? " selected" : "") + '>' + esc(c) + '</option>').join("")
+    + '</select></div></div>'
+    + '<div class="row"><div><label class="fld">Prep (mins)</label>'
+    + '<input type="number" id="er-prep" min="0" value="' + (r.prepMins || "") + '"></div>'
+    + '<div><label class="fld">Cook (mins)</label>'
+    + '<input type="number" id="er-cook" min="0" value="' + (r.cookMins || "") + '"></div></div>'
+    + '<label class="fld">Ingredients — one per line</label>'
+    + '<textarea id="er-ings" rows="6">'
+    + esc((r.ingredients || []).map(function(g){ var l = ingLine(g); return (l.q ? l.q + " " : "") + l.n; }).join("\n"))
+    + '</textarea>'
+    + '<label class="fld">Method — one step per line</label>'
+    + '<textarea id="er-steps" rows="7">' + esc((r.steps || []).join("\n")) + '</textarea>'
+    + '<label class="fld">Notes</label>'
+    + '<textarea id="er-notes" rows="2" placeholder="What you changed, what worked">' + esc(r.notes || "") + '</textarea>'
+    + '<label class="fld">Source</label><input type="text" id="er-src" value="' + esc(r.source || "") + '">'
+    + '<label class="fld">Link</label><input type="text" id="er-link" value="' + esc(r.link || "") + '">'
+    + '<div class="row" style="margin-top:14px">'
+    + '<button class="btn ghost" onclick="openRecipe(\'' + id + '\')">Cancel</button>'
+    + '<button class="btn" onclick="saveRecipeEdit(\'' + id + '\')">Save</button></div></div>';
+  document.querySelector(".view:not([hidden])").scrollTop = 0;
+}
+function saveRecipeEdit(id){
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
+  var t = document.getElementById("er-title").value.trim();
+  if(!t){ toast("Give it a title"); return; }
+  r.title = t;
+  r.serves = parseInt(document.getElementById("er-serves").value) || 4;
+  r.category = document.getElementById("er-cat").value;
+  r.prepMins = parseInt(document.getElementById("er-prep").value) || null;
+  r.cookMins = parseInt(document.getElementById("er-cook").value) || null;
+  r.ingredients = document.getElementById("er-ings").value.split("\n")
+    .map(x => x.trim()).filter(Boolean).map(parseIngredient);
+  r.ingredients.forEach(function(g){ learnFood(g.name, {use:"recipe"}); });
+  r.steps = document.getElementById("er-steps").value.split("\n").map(x => x.trim()).filter(Boolean);
+  r.notes = document.getElementById("er-notes").value.trim();
+  r.source = document.getElementById("er-src").value.trim();
+  r.link = document.getElementById("er-link").value.trim();
+  delete r.method;
+  refreshFoodOptions(); save(); openRecipe(id); toast("Saved");
+}
+function recipeToShop(id){
+  var r = S.recipes.find(x => x.id === id); if(!r) return;
+  var added = addIngredients(r.ingredients || [], r.title);
+  save();
+  toast(added.length ? added.length + " added to your list" : "Nothing to add");
+}
+
+/* Photos are shrunk to something a phone screen can actually use.
+   A 4MB camera shot becomes roughly 80–150KB, which keeps the
+   whole collection inside the browser's storage allowance. */
+function downscale(file, maxPx, quality){
+  return new Promise(function(resolve, reject){
+    var fr = new FileReader();
+    fr.onerror = function(){ reject(new Error("read")); };
+    fr.onload = function(e){
+      var img = new Image();
+      img.onerror = function(){ reject(new Error("decode")); };
+      img.onload = function(){
+        var w = img.width, h = img.height, sc = Math.min(1, maxPx / Math.max(w, h));
+        var c = document.createElement("canvas");
+        c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function setRecipePhoto(ev){
+  var f = ev.target.files[0]; ev.target.value = "";
+  if(!f || !currentRecipe) return;
+  var r = S.recipes.find(x => x.id === currentRecipe); if(!r) return;
+  toast("Shrinking the photo…");
+  downscale(f, 900, 0.65).then(function(dataUrl){
+    var prev = r.photo;
+    r.photo = dataUrl;
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify(S));
+      openRecipe(currentRecipe);
+      toast("Photo saved (" + Math.round(dataUrl.length / 1024) + "KB)");
+    }catch(err){
+      r.photo = prev;
+      toast("No room left — remove a photo or two first");
+    }
+  }).catch(function(){ toast("Couldn't read that image"); });
+}
+
+/* ── storage meter ── */
+function storageUsed(){
+  try{ return (localStorage.getItem(STORE_KEY) || "").length; }catch(e){ return 0; }
+}
+function renderStorage(){
+  var used = storageUsed(), cap = 5 * 1024 * 1024;   // Safari's usual per-site allowance
+  var pct = Math.min(100, (used / cap) * 100);
+  var photos = S.recipes.filter(r => r.photo).length;
+  document.getElementById("storage-state").textContent =
+    Math.round(used / 1024) + "KB of about 5MB used · " + S.recipes.length + " recipes, "
+    + photos + " with photos" + (pct > 80 ? " — running low" : "");
+  var bar = document.getElementById("storage-bar");
+  bar.style.width = pct.toFixed(1) + "%";
+  bar.style.background = pct > 85 ? "var(--danger)" : "var(--accent)";
+}
+
+/* Same shrink as a file upload, but starting from a data URL. */
+function shrinkDataUrl(dataUrl, maxPx, quality){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    img.onerror = function(){ reject(new Error("decode")); };
+    img.onload = function(){
+      var w = img.width, h = img.height, sc = Math.min(1, maxPx / Math.max(w, h));
+      var c = document.createElement("canvas");
+      c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
 </script>
 <script>
 /* ═══ HOUSEHOLD ════════════════════════════════════════════ */
@@ -1960,6 +2242,7 @@ function renderAppearance(){
 /* ═══ SETTINGS ═════════════════════════════════════════════ */
 function renderSettings(){
   renderAppearance();
+  renderStorage();
   var ws = document.getElementById("set-weekstart");
   ws.innerHTML = DAYS.map(d => '<option' + (d===S.weekStart?" selected":"") + '>' + d + '</option>').join("");
   document.getElementById("set-slots").innerHTML = ALL_SLOTS.map(sl =>
@@ -2085,9 +2368,19 @@ function wipeAll(){
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
   }catch(e){
-    document.body.innerHTML = '<div style="padding:24px;font-family:-apple-system,sans-serif">'
-      + '<h2 style="margin-bottom:10px">Something went wrong starting up</h2>'
-      + '<pre style="white-space:pre-wrap;font-size:12px;color:#A32D2D">' + String(e && e.stack || e) + '</pre></div>';
+    /* Safari omits the message from e.stack, so show it separately —
+       otherwise this screen is just line numbers and no reason. */
+    var why = (e && (e.name ? e.name + ": " : "") + (e.message || "")) || String(e);
+    document.body.innerHTML =
+      '<div style="padding:22px;font-family:-apple-system,sans-serif;line-height:1.5">'
+      + '<h2 style="margin-bottom:6px;font-size:18px">Something went wrong starting up</h2>'
+      + '<div style="font-size:13px;color:#5F5E5A;margin-bottom:14px">Build ' + VERSION + '</div>'
+      + '<div style="background:#FCEBEB;color:#A32D2D;padding:12px;border-radius:10px;'
+      + 'font-size:14px;font-weight:600;word-break:break-word;margin-bottom:14px">' + why + '</div>'
+      + '<pre style="white-space:pre-wrap;font-size:11px;color:#5F5E5A;word-break:break-word">'
+      + String((e && e.stack) || "") + '</pre>'
+      + '<div style="font-size:13px;color:#5F5E5A;margin-top:16px">'
+      + 'Your saved data is untouched — this is a startup fault, not data loss.</div></div>';
   }
 })();
 </script>
