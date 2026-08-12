@@ -424,7 +424,7 @@ body.dark .rmeta span{color:var(--ink);}
   <div class="sec-hd">Meals the household plans</div>
   <div class="card">
     <div class="chips" id="set-slots"></div>
-    <div class="hint" style="margin-top:9px">Up to five. Individuals can override this on their own page.</div>
+    <div class="hint" style="margin-top:9px">Up to six. Individuals can override this on their own page. Treat is filtered separately — only recipes saved as <b>Treat meal</b> are offered there.</div>
   </div>
 
   <div class="sec-hd">Claude API key</div>
@@ -493,13 +493,13 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.8";
+var VERSION = "2026.08.9";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
 /* ── reference data ───────────────────────────────────────── */
 var DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-var ALL_SLOTS = ["Breakfast","Brunch","Lunch","Dinner","Tea","Supper","Snack"];
+var ALL_SLOTS = ["Breakfast","Brunch","Lunch","Dinner","Tea","Supper","Snack","Treat"];
 var MODES = ["Standard","Slimming World","Low carb / HP","Fasting","Making own","Skip"];
 var RECIPE_CATS = ["Slimming World","Low carb / HP","General eating","Treat meal"];
 var AVATAR_COLOURS = ["#0F6E56","#3C3489","#A32D2D","#633806","#042C53","#712B13"];
@@ -569,7 +569,8 @@ var SLOT_CONTEXT = {
   "Dinner":"dinner / main evening meal — full cooked meals, pasta, roasts, curries, stir-fries, casseroles, family recipes.",
   "Tea":"early evening family tea — lighter than dinner, child-friendly, quick to prepare.",
   "Supper":"light supper — soup, cheese on toast, small plates, leftovers. Not a full dinner.",
-  "Snack":"snacks ONLY — fruit, nuts, yogurt, hummus and veg, rice cakes, small bites. Absolutely NOT main meals."
+  "Snack":"snacks ONLY — fruit, nuts, yogurt, hummus and veg, rice cakes, small bites. Absolutely NOT main meals.",
+  "Treat":"a deliberate treat — puddings, desserts, cakes, bakes, chocolate dishes, indulgent sweet or savoury things eaten for pleasure rather than nutrition. This is the meal where the diet is set aside on purpose, so do NOT suggest diet-friendly or 'guilt-free' versions unless the eaters are on a plan that allows a counted treat. Absolutely NOT a main meal."
 };
 
 var CTX_SECTIONS = [
@@ -601,6 +602,25 @@ var CTX_SECTIONS = [
   ]}
 ];
 var ALL_CTX = CTX_SECTIONS.flatMap(s => s.items.map(i => i.id));
+/* Which saved-recipe category suits a person on a given eating mode. */
+function modeCategory(mode){
+  return mode === "Slimming World" ? "Slimming World"
+       : mode === "Low carb / HP"  ? "Low carb / HP"
+       : "General eating";
+}
+/* Treats belong to the Treat slot and nowhere else — otherwise a
+   pudding turns up as a suggestion for Tuesday lunch. */
+function recipesForSlot(slot, day){
+  var cell = ensureCell(day, slot);
+  if(slot === "Treat") return S.recipes.filter(function(r){ return r.category === "Treat meal"; });
+  var wanted = {};
+  eatersFor(day, slot).forEach(function(m){ wanted[modeCategory(cell.modes[m.id] || m.mode)] = true; });
+  var pool = S.recipes.filter(function(r){ return r.category !== "Treat meal"; });
+  /* Anything matching someone's plan floats to the top; the rest still show. */
+  return pool.sort(function(a, b){
+    return (wanted[b.category] ? 1 : 0) - (wanted[a.category] ? 1 : 0);
+  });
+}
 function ctxLabel(id){
   for(var s of CTX_SECTIONS) for(var i of s.items) if(i.id===id) return i.label;
   return id;
@@ -897,14 +917,20 @@ function slotBody(day, slot, cell, eating){
        + (s.buy && s.buy.length ? " · " + s.buy.length + " to buy" : "") + '</div></div>';
   });
 
-  var saved = S.recipes.filter(r => !cell.suggestions.some(s => s.title === r.title));
+  var saved = recipesForSlot(slot, day)
+    .filter(r => !cell.suggestions.some(s => s.title === r.title));
   if(saved.length){
-    h += '<div class="sec-hd" style="margin-top:14px">From your recipes</div>';
+    h += '<div class="sec-hd" style="margin-top:14px">'
+       + (slot === "Treat" ? "Your treats" : "From your recipes") + '</div>';
     saved.slice(0,8).forEach(r => {
       h += '<div class="sug" onclick="event.stopPropagation();chooseSaved(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + r.id + '\')">'
          + '<div class="st">' + esc(r.title) + '</div>'
-         + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves) + '</div></div>';
+         + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves)
+         + (totalMins(r) ? ' · ' + fmtMins(totalMins(r)) : "") + '</div></div>';
     });
+  } else if(slot === "Treat"){
+    h += '<div class="hint" style="margin-top:14px">No treats saved yet — add one on the Recipes tab '
+       + 'with the category set to Treat meal, and it will show up here.</div>';
   }
   return h;
 }
@@ -1213,11 +1239,15 @@ async function loadSuggestions(day, slot){
   });
   var stds = Object.keys(S.standards).filter(k => k.split("||")[0] === slot).map(k => k.split("||").slice(1).join("||"));
   var cupboard = S.cupboard.map(c => c.name).join(", ");
-  var saved = S.recipes.map(r => r.title + " (" + r.category + ", serves " + r.serves + ")").join("; ");
+  var saved = recipesForSlot(slot, day)
+    .map(r => r.title + " (" + r.category + ", serves " + r.serves + ")").join("; ");
 
   var system = "You are a personal household recipe assistant for UK family cooking. You are a discovery and planning assistant — NOT a recipe database.\n"
     + "Recommend dishes from: Pinch of Nom (pinchofnom.com), ZOE (zoe.com/learn), BBC Good Food (bbcgoodfood.com), or the household's own saved recipes. Never reproduce a full recipe — give the title, a one-line reason, a link, and the ingredients needed.\n\n"
-    + "MEAL SLOT: " + slot + ". " + (SLOT_CONTEXT[slot] || "") + "\n\n"
+    + "MEAL SLOT: " + slot + ". " + (SLOT_CONTEXT[slot] || "") + "\n"
+    + (slot === "Treat"
+        ? "This is the household's treat slot. Suggest proper treats, not diet substitutes.\n\n"
+        : "Do NOT suggest puddings, desserts or cakes — the household plans those in a separate Treat slot.\n\n")
     + "VARIETY: do NOT suggest any of these already-planned meals: " + (planned.join(", ") || "none") + ".\n"
     + "REGULARS for " + slot + ": " + (stds.join(", ") || "none") + ". If any exist, include one and set is_standard true.\n"
     + "PORTIONS: cook for " + (eating.length || 1) + ".\n"
@@ -2418,7 +2448,7 @@ function applySettings(){
 function toggleSlot2(sl){
   if(S.slots.includes(sl)) S.slots = S.slots.filter(x => x !== sl);
   else{
-    if(S.slots.length >= 5){ toast("Five meals is the limit"); return; }
+    if(S.slots.length >= 6){ toast("Six meals is the limit"); return; }
     S.slots = ALL_SLOTS.filter(x => S.slots.includes(x) || x === sl);
   }
   save(); renderSettings();
