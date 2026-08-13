@@ -205,6 +205,8 @@ body.dark .rmeta span{color:var(--ink);}
 .ing{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
 .ing:last-child{border-bottom:none;}
 .ing .q{color:var(--muted);min-width:64px;font-size:13px;}
+.banner{background:var(--warn);color:var(--warn-ink);border-radius:var(--r-sm);
+  padding:10px 12px;font-size:12.5px;line-height:1.45;margin-bottom:9px;}
 .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--ink);
   color:var(--bg);padding:10px 16px;border-radius:22px;font-size:13px;z-index:99;
   box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:opacity .2s;
@@ -226,6 +228,7 @@ body.dark .rmeta span{color:var(--ink);}
 
 <!-- ══ PLAN ══ -->
 <div class="view" id="v-plan">
+  <div class="banner" id="nudge-plan" hidden></div>
   <div id="plan-setup" class="empty" hidden></div>
   <div id="plan-main" hidden>
     <div class="daybar">
@@ -409,6 +412,17 @@ body.dark .rmeta span{color:var(--ink);}
 
 <!-- ══ SETTINGS ══ -->
 <div class="view" id="v-settings" hidden>
+  <div class="banner" id="nudge-settings" hidden></div>
+
+  <div class="card" id="recover-box" hidden style="border-color:var(--warn)">
+    <div style="font-weight:600;margin-bottom:4px">Photos without a recipe</div>
+    <div class="hint" id="recover-count">—</div>
+    <div class="hint" style="margin-top:7px">If these were cookbook scans, the photo is the page — restore one
+      and tap <b>Read this page</b> to rebuild the recipe from it.</div>
+    <div class="card flush" id="recover-grid" style="margin:11px 0 0"></div>
+    <button class="btn wide sm" style="margin-top:11px" onclick="recoverAll()">Restore them all</button>
+  </div>
+
   <div class="sec-hd">Appearance</div>
   <div class="card">
     <div class="chips" id="theme-chips"></div>
@@ -461,6 +475,7 @@ body.dark .rmeta span{color:var(--ink);}
   <div class="sec-hd">Backup</div>
   <div class="card">
     <div class="hint">Everything lives on this phone. Take a copy before clearing Safari data or changing handset.</div>
+    <div class="hint" id="backup-state" style="margin-top:6px;font-weight:600">—</div>
     <div class="row" style="margin-top:11px">
       <button class="btn ghost sm" onclick="exportData()">Export</button>
       <button class="btn ghost sm" onclick="document.getElementById('import-in').click()">Import</button>
@@ -469,6 +484,8 @@ body.dark .rmeta span{color:var(--ink);}
     <div class="hint" style="margin-top:8px">The plain export is small and quick. The one with photos is
       much larger but is the only version that carries your recipe pictures to another device.</div>
     <input type="file" id="import-in" accept=".json" hidden onchange="importData(event)">
+    <div class="hint" style="margin-top:8px">Import <b>replaces</b> what is on this phone — it does not merge.
+      Export first if there is anything here you want to keep.</div>
   </div>
 
   <div class="sec-hd">Start again</div>
@@ -494,7 +511,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.10";
+var VERSION = "2026.08.13";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -627,6 +644,39 @@ function recipesForSlot(slot, day){
     return (wanted[b.category] ? 1 : 0) - (wanted[a.category] ? 1 : 0);
   });
 }
+
+var APPROVED_SITES = [
+  {host:"pinchofnom.com",   name:"Pinch of Nom", search:"https://pinchofnom.com/?s="},
+  {host:"zoe.com",          name:"ZOE",          search:"https://zoe.com/search?q="},
+  {host:"bbcgoodfood.com",  name:"BBC Good Food",search:"https://www.bbcgoodfood.com/search?q="}
+];
+function trustedLink(url){
+  if(!url) return null;
+  var u = String(url).trim();
+  if(!/^https?:\/\//i.test(u)) return null;
+  var host = u.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+  return APPROVED_SITES.some(function(s){
+    return host === s.host || host.endsWith("." + s.host);
+  }) ? u : null;
+}
+/* When there is no verified link, send them to the site's own search
+   for the dish rather than to a URL that may not exist. */
+function searchLink(title, source){
+  var src = String(source || "").toLowerCase();
+  var site = APPROVED_SITES.filter(function(s){ return src.indexOf(s.name.toLowerCase()) !== -1; })[0]
+          || APPROVED_SITES[2];
+  return {url:site.search + encodeURIComponent(title), name:site.name};
+}
+/* We can check a link points at a site we trust, but not that the page
+   still exists — so the site's own search is always offered alongside. */
+function recipeLinkHtml(item){
+  if(!item || !item.title) return "";
+  var good = trustedLink(item.link);
+  var s = searchLink(item.title, item.source);
+  return (good ? ' · <a href="' + esc(good) + '" target="_blank" rel="noopener">Open recipe</a>' : "")
+       + ' · <a href="' + esc(s.url) + '" target="_blank" rel="noopener">Search ' + esc(s.name) + '</a>';
+}
+function totalSugMins(s){ return (Number(s.prepMins)||0) + (Number(s.cookMins)||0); }
 function ctxLabel(id){
   for(var s of CTX_SECTIONS) for(var i of s.items) if(i.id===id) return i.label;
   return id;
@@ -639,7 +689,7 @@ function blankState(){
     members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{},
     plan:{}, standards:{}, recipes:[], shop:[], cupboard:[],
     stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
-    prices:{}, spend:[], aliases:{}, foods:{},
+    prices:{}, spend:[], aliases:{}, foods:{}, lastExport:null,
     dayIdx:0, weekOffset:0, apiKey:"",
     theme:"pine", mode:"auto"
   };
@@ -830,6 +880,7 @@ function changeDay(dir){
 }
 function renderPlan(){
   updateBadge();
+  renderBackupNudge();
   var setup = document.getElementById("plan-setup"), main = document.getElementById("plan-main");
   if(!S.members.length){
     setup.hidden = false; main.hidden = true;
@@ -898,14 +949,29 @@ function slotBody(day, slot, cell, eating){
 
   if(cell.chosen){
     var c = cell.chosen;
+    var cMeta = [];
+    if(c.serves) cMeta.push("serves " + c.serves);
+    if(c.prepMins) cMeta.push(fmtMins(c.prepMins) + " prep");
+    if(c.cookMins) cMeta.push(fmtMins(c.cookMins) + " cook");
     h += '<div class="sug picked" style="margin-top:11px"><div class="st">' + esc(c.title) + '</div>'
        + (c.why ? '<div class="sy">' + esc(c.why) + '</div>' : "")
-       + '<div class="ss">' + esc(c.source || "") + (c.link ? ' · <a href="' + esc(c.link) + '" target="_blank" rel="noopener">Open</a>' : "") + '</div>'
+       + (cMeta.length ? '<div class="rmeta">' + cMeta.map(function(m){ return '<span>' + esc(m) + '</span>'; }).join("") + '</div>' : "")
+       + (c.looks ? '<div class="sy" style="margin-top:8px"><b>On the plate:</b> ' + esc(c.looks) + '</div>' : "")
+       + ((c.steps && c.steps.length)
+            ? '<div class="sec-hd" style="margin-top:12px;margin-bottom:4px">Method</div>'
+              + c.steps.map(function(s, i){
+                  return '<div class="step"><div class="no">' + (i+1) + '</div><div class="tx">' + esc(s) + '</div></div>';
+                }).join("")
+            : "")
+       + '<div class="ss">' + esc(c.source || "") + recipeLinkHtml(c) + '</div>'
        + '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">'
        + '<button class="mini" onclick="event.stopPropagation();unchoose(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Change meal</button>'
        + (S.standards[stdKey(slot,c.title)]
             ? '<button class="mini mut" onclick="event.stopPropagation();unmarkStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\')">★ Regular — remove</button>'
-            : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\')">☆ Make this a regular</button>')
+            : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\',\'' + esc(day) + '\')">☆ Make this a regular</button>')
+       + (savedRecipeFor(c.title)
+            ? '<button class="mini" onclick="event.stopPropagation();openSavedRecipe(\'' + esc(c.title) + '\')">View recipe</button>'
+            : '<button class="mini" onclick="event.stopPropagation();keepAsRecipe(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Save to recipes</button>')
        + '</div></div>';
     return h;
   }
@@ -921,7 +987,9 @@ function slotBody(day, slot, cell, eating){
        + '<div class="st">' + (s.is_standard ? "★ " : "") + esc(s.title) + '</div>'
        + (s.why ? '<div class="sy">' + esc(s.why) + '</div>' : "")
        + '<div class="ss">' + esc(s.source || "")
-       + (s.buy && s.buy.length ? " · " + s.buy.length + " to buy" : "") + '</div></div>';
+       + (s.buy && s.buy.length ? " · " + s.buy.length + " to buy" : "")
+       + (s.steps && s.steps.length ? " · " + s.steps.length + " steps" : "")
+       + (totalSugMins(s) ? " · " + fmtMins(totalSugMins(s)) : "") + '</div></div>';
   });
 
   var saved = recipesForSlot(slot, day)
@@ -946,7 +1014,13 @@ function setMode(day, slot, mid, val){
   ensureCell(day, slot).modes[mid] = val;
   save(); renderPlan();
 }
-function markStd(slot, title){ S.standards[stdKey(slot,title)] = true; save(); renderPlan(); }
+/* A "regular" used to be just a flag against a title, so the dish itself
+   vanished once the week moved on. Starring now also files it as a recipe. */
+function markStd(slot, title, day){
+  S.standards[stdKey(slot,title)] = true;
+  if(day && !savedRecipeFor(title)) keepAsRecipe(day, slot, true);
+  save(); renderPlan();
+}
 function unmarkStd(slot, title){ delete S.standards[stdKey(slot,title)]; save(); renderPlan(); }
 
 function choose(day, slot, idx){
@@ -1198,7 +1272,7 @@ function copyShopList(){ copyText(shopListText(), "List copied"); }
 
 /* ═══ CLAUDE API ═══════════════════════════════════════════ */
 function haveKey(){ return !!(S.apiKey && S.apiKey.trim()); }
-async function callClaude(system, content, maxTokens){
+async function callClaude(system, content, maxTokens, opts){
   if(!haveKey()) throw new Error("no-key");
   var res = await fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
@@ -1208,8 +1282,10 @@ async function callClaude(system, content, maxTokens){
       "anthropic-version":"2023-06-01",
       "anthropic-dangerous-direct-browser-access":"true"
     },
-    body:JSON.stringify({model:MODEL, max_tokens:maxTokens||1200, system:system,
-                         messages:[{role:"user", content:content}]})
+    body:JSON.stringify(Object.assign(
+      {model:MODEL, max_tokens:maxTokens||1200, system:system,
+       messages:[{role:"user", content:content}]},
+      opts && opts.search ? {tools:[{type:"web_search_20250305", name:"web_search"}]} : {}))
   });
   if(!res.ok){
     var t = await res.text();
@@ -1218,7 +1294,13 @@ async function callClaude(system, content, maxTokens){
   }
   var data = await res.json();
   var raw = (data.content || []).map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
-  return JSON.parse(raw);
+  try{ return JSON.parse(raw); }
+  catch(e){
+    /* With search on, the model may wrap the JSON in prose. Take the outermost object. */
+    var a = raw.indexOf("{"), b = raw.lastIndexOf("}");
+    if(a === -1 || b <= a) throw e;
+    return JSON.parse(raw.slice(a, b + 1));
+  }
 }
 
 async function loadSuggestions(day, slot){
@@ -1253,7 +1335,11 @@ async function loadSuggestions(day, slot){
   var system = "You are a personal household recipe assistant for UK family cooking. You are a discovery and planning assistant — NOT a recipe database.\n"
     + (OWN_LIST_SLOTS[slot]
         ? "For this slot, suggest things the household would actually reach for, including shop-bought items. A recipe source is not required.\n\n"
-        : "Recommend dishes from: Pinch of Nom (pinchofnom.com), ZOE (zoe.com/learn), BBC Good Food (bbcgoodfood.com), or the household's own saved recipes. Never reproduce a full recipe — give the title, a one-line reason, a link, and the ingredients needed.\n\n")
+        : "Write each suggestion as a complete, practical recipe in your OWN words — your own ingredient quantities, "
+          + "your own method, written for a home cook in a UK kitchen. Pinch of Nom, ZOE and BBC Good Food are useful "
+          + "for inspiration and for a link where you find a genuine match, but they are a supplement, not a "
+          + "requirement: a good original recipe with no link is better than a weak one with a link. "
+          + "Never copy wording from any source — write it fresh.\n\n")
     + "MEAL SLOT: " + slot + ". " + (SLOT_CONTEXT[slot] || "") + "\n"
     + (OWN_LIST_SLOTS[slot]
         ? "This slot draws on the household's OWN saved list under the category \"" + OWN_LIST_SLOTS[slot] + "\". "
@@ -1270,15 +1356,29 @@ async function loadSuggestions(day, slot){
     + "WHO'S EATING:\n" + (profiles || "Standard household") + "\n"
     + "STORE CUPBOARD (assume these are in): " + (cupboard || "not specified") + "\n"
     + "SAVED RECIPES: " + (saved || "none") + "\n\n"
+    + (OWN_LIST_SLOTS[slot] ? "" :
+        "LINKS: only put a URL in \"link\" if you have actually seen that page in web search results this turn. "
+        + "Never construct, guess or recall a URL from memory. An empty link is perfectly fine — the recipe you "
+        + "write is the substance.\n\n")
     + "Return 3-5 suggestions as valid JSON only, no markdown fences:\n"
     + '{"recipes":[{"title":"","source":"","link":"","why":"","suits_sw":false,"suits_lc":false,'
-    + '"buy":[{"name":"chicken breasts","qty":"4","unit":""}],"is_standard":false}]}\n'
-    + 'In "buy", list every ingredient the dish needs that is NOT in the store cupboard. Use plain shopping names — "chicken breasts", not "free-range chicken breast fillets, diced".';
+    + '"prepMins":15,"cookMins":30,"serves":4,'
+    + '"buy":[{"name":"chicken breasts","qty":"4","unit":""}],'
+    + '"pantry":[{"name":"olive oil","qty":"2","unit":"tbsp"}],'
+    + '"steps":["",""],"looks":"","is_standard":false}]}\n'
+    + 'In "buy", list every ingredient that is NOT in the store cupboard. In "pantry", list the ones that ARE, '
+    + 'with quantities, so the recipe is complete to cook from. Use plain shopping names in "buy" — '
+    + '"chicken breasts", not "free-range chicken breast fillets, diced".\n'
+    + '"steps" is the full method, one clear instruction per entry, enough to cook from without another source. '
+    + 'Include pan sizes, heats and timings where they matter.\n'
+    + '"looks" is one or two sentences describing how the finished dish should look on the plate — colour, '
+    + 'texture, how to serve it — so the cook knows what they are aiming for.';
 
   try{
     var parsed = await callClaude(system,
       "Suggest " + slot + " options for " + day + ". " + (eating.length||1) + " eating."
-      + (diets.length ? " Diets: " + diets.join(", ") : ""), 1400);
+      + (diets.length ? " Diets: " + diets.join(", ") : ""),
+      1600, {search: !OWN_LIST_SLOTS[slot]});
     cell.suggestions = parsed.recipes || [];
     cell.suggestions.forEach(s => { if(stds.includes(s.title)) s.is_standard = true; });
     cell.loaded = true;
@@ -1851,8 +1951,13 @@ function openRecipe(id){
         : "")
     + '<div class="card"><h2>' + esc(r.title) + '</h2>'
     + '<div class="hint">' + esc(r.category) + (r.source ? ' · ' + esc(r.source) : "") + '</div>'
+    + (r.aiWritten && !r.cooked
+        ? '<div class="banner" style="margin-top:10px">Written by Claude, not yet cooked. Quantities and '
+          + 'timings are a starting point — adjust as you go, then mark it tested.</div>'
+          + '<button class="btn ghost sm" onclick="markCooked(\'' + r.id + '\')">Mark as tested</button>'
+        : "")
     + (meta.length ? '<div class="rmeta">' + meta.map(m => '<span>' + esc(m) + '</span>').join("") + '</div>' : "")
-    + (r.link ? '<div style="margin-top:10px"><a href="' + esc(r.link) + '" target="_blank" rel="noopener">Open the original</a></div>' : "")
+    + '<div style="margin-top:10px" class="hint">' + recipeLinkHtml(r).replace(/^ · /, "") + '</div>' 
     + '</div>'
 
     + '<div class="sec-hd">Ingredients</div><div class="card">'
@@ -1876,6 +1981,9 @@ function openRecipe(id){
     + '<button class="btn ghost" onclick="document.getElementById(\'rphoto-in\').click()">'
     + (r.photo ? "Change photo" : "Add photo") + '</button></div>'
     + '<input type="file" id="rphoto-in" accept="image/*" hidden onchange="setRecipePhoto(event)">'
+    + ((r.hasPhoto || r.photo) && (r.needsRead || !(r.steps || []).length)
+        ? '<button class="btn wide sm" style="margin-top:9px" onclick="rereadRecipe(\'' + r.id + '\')">Read this page with Claude</button>'
+        : "")
     + ((r.hasPhoto || r.photo) ? '<button class="btn wide ghost sm" style="margin-top:9px" onclick="removePhoto(\'' + r.id + '\')">Remove photo</button>' : "")
     + '<button class="btn wide danger" style="margin-top:9px" onclick="delRecipe(\'' + r.id + '\')">Delete recipe</button>';
   hydratePhotos(el, false);
@@ -2151,6 +2259,219 @@ function hydratePhotos(root, thumb){
       });
     }).catch(function(){});
   });
+}
+
+/* ═══ KEEPING A SUGGESTION ═════════════════════════════════
+   Suggestions used to live only inside the week's plan, so a
+   dish you liked was gone once the week rolled on. These file
+   it into Recipes, carrying across whatever we actually know:
+   title, ingredients, source and a verified link. The method
+   is left for you to add or scan — we don't copy it wholesale.
+   ═════════════════════════════════════════════════════════ */
+function savedRecipeFor(title){
+  var k = normalise(title);
+  return S.recipes.filter(function(r){ return normalise(r.title) === k; })[0] || null;
+}
+function openSavedRecipe(title){
+  var r = savedRecipeFor(title);
+  if(!r){ toast("Not in your recipes yet"); return; }
+  goTab("recipes");
+  openRecipe(r.id);
+}
+function categoryForSlot(slot, day){
+  if(OWN_LIST_SLOTS[slot]) return OWN_LIST_SLOTS[slot];
+  var cell = ensureCell(day, slot);
+  var eating = eatersFor(day, slot);
+  var modes = eating.map(function(m){ return cell.modes[m.id] || m.mode; });
+  if(modes.length && modes.every(function(m){ return m === "Slimming World"; })) return "Slimming World";
+  if(modes.length && modes.every(function(m){ return m === "Low carb / HP"; })) return "Low carb / HP";
+  return "General eating";
+}
+function keepAsRecipe(day, slot, quiet){
+  var cell = ensureCell(day, slot);
+  var c = cell.chosen;
+  if(!c){ toast("Nothing chosen for this meal"); return null; }
+  var existing = savedRecipeFor(c.title);
+  if(existing){ if(!quiet) toast("Already in your recipes"); return existing; }
+
+  /* Both lists go in — what you must buy AND what you already have —
+     so the saved recipe is complete to cook from. */
+  var ings = (c.buy || []).concat(c.pantry || [])
+    .map(parseIngredient).filter(function(g){ return g.name; });
+  ings.forEach(function(g){ learnFood(g.name, {use:"recipe"}); });
+
+  var notes = [];
+  if(c.why) notes.push(c.why);
+  if(c.looks) notes.push("On the plate: " + c.looks);
+
+  var r = {
+    id:uid(), title:c.title,
+    serves:c.serves || Math.max(1, eatersFor(day, slot).length || 4),
+    category:categoryForSlot(slot, day),
+    prepMins:c.prepMins || null, cookMins:c.cookMins || null,
+    ingredients:ings, steps:(c.steps || []).slice(), notes:notes.join("\n\n"),
+    photo:"", hasPhoto:false, aiWritten:true, cooked:false,
+    source:c.source || "Claude", link:trustedLink(c.link) || ""
+  };
+  S.recipes.push(r);
+  refreshFoodOptions(); save();
+  if(!quiet) toast("Saved to Recipes — add the method when you make it");
+  return r;
+}
+
+/* A recipe Claude wrote is a starting point until it has been made once.
+   Marking it tested drops the caveat and keeps your own edits. */
+function markCooked(id){
+  var r = S.recipes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  r.cooked = true;
+  save(); openRecipe(id);
+  toast("Marked as tested");
+}
+
+/* ═══ RECOVERY ═════════════════════════════════════════════
+   Importing a backup replaces the text data outright, but the
+   photo store is separate and survives. So after a bad import
+   there are usually images sitting there with nothing pointing
+   at them. For anything scanned, that image IS the cookbook
+   page — which means the recipe can often be rebuilt from it.
+   ═════════════════════════════════════════════════════════ */
+var orphanKeys = [];
+
+function findOrphans(){
+  return idbKeys().then(function(keys){
+    var live = {};
+    S.recipes.forEach(function(r){ live[r.id] = true; });
+    orphanKeys = keys.filter(function(k){
+      return String(k).indexOf(":thumb") === -1 && !live[k];
+    });
+    return orphanKeys;
+  }).catch(function(){ orphanKeys = []; return []; });
+}
+function renderRecovery(){
+  var box = document.getElementById("recover-box");
+  if(!box) return;
+  findOrphans().then(function(keys){
+    if(!keys.length){ box.hidden = true; return; }
+    box.hidden = false;
+    document.getElementById("recover-count").textContent =
+      keys.length + (keys.length === 1 ? " photo has" : " photos have")
+      + " no recipe attached — probably left behind by an import.";
+    var grid = document.getElementById("recover-grid");
+    grid.innerHTML = keys.map(function(k){
+      return '<div class="shop-row">'
+        + '<img data-photo="' + esc(k) + '" style="width:52px;height:52px;object-fit:cover;'
+        + 'border-radius:8px;flex-shrink:0;background:var(--accent-soft)">'
+        + '<div class="grow"><div class="nm">Unattached photo</div>'
+        + '<div class="mt">' + esc(String(k).slice(0, 10)) + '</div></div>'
+        + '<button class="mini" onclick="recoverOne(\'' + esc(k) + '\')">Restore</button>'
+        + '</div>';
+    }).join("");
+    hydratePhotos(grid, true);
+  });
+}
+function recoverOne(key){
+  var r = {
+    id:key, title:"Recovered recipe", serves:4, category:"General eating",
+    prepMins:null, cookMins:null, ingredients:[], steps:[], notes:"",
+    photo:"", hasPhoto:true, source:"Recovered", link:"", needsRead:true
+  };
+  S.recipes.push(r); save();
+  renderRecovery(); renderRecipes();
+  toast("Restored — open it and tap Read this page");
+}
+function recoverAll(){
+  if(!orphanKeys.length){ toast("Nothing to recover"); return; }
+  if(!confirm("Restore all " + orphanKeys.length + " photos as recipes?")) return;
+  var n = 0;
+  orphanKeys.slice().forEach(function(k){
+    if(S.recipes.some(function(r){ return r.id === k; })) return;
+    S.recipes.push({id:k, title:"Recovered recipe", serves:4, category:"General eating",
+      prepMins:null, cookMins:null, ingredients:[], steps:[], notes:"",
+      photo:"", hasPhoto:true, source:"Recovered", link:"", needsRead:true});
+    n++;
+  });
+  save(); renderRecovery(); renderRecipes();
+  toast(n + " restored — read each page to fill in the details");
+}
+
+/* Re-run the scanner against a photo already in the store. */
+async function rereadRecipe(id){
+  if(!haveKey()){ toast("Add your Claude API key in Settings first"); goTab("settings"); return; }
+  var r = S.recipes.find(function(x){ return x.id === id; });
+  if(!r){ return; }
+  toast("Reading the page…");
+  var dataUrl;
+  try{ dataUrl = await idbGet(id); }catch(e){ dataUrl = null; }
+  if(!dataUrl){ toast("No stored image for this one"); return; }
+  var content = [
+    {type:"image", source:{type:"base64", media_type:"image/jpeg", data:dataUrl.split(",")[1]}},
+    {type:"text", text:"Read this recipe from the photographed page."}
+  ];
+  try{
+    var out = await callClaude(
+      "Read the recipe from the photographed page. Return valid JSON only, no markdown:\n"
+      + '{"title":"","serves":4,"category":"","prepMins":null,"cookMins":null,'
+      + '"ingredients":[{"name":"","qty":"","unit":""}],"steps":["",""]}\n'
+      + 'category must be one of: ' + RECIPE_CATS.join(", ") + '. '
+      + 'Use plain shopping names in ingredients. One instruction per entry in steps. '
+      + 'If the page is too unclear to read, return {"title":""} and nothing else.',
+      content, 1600);
+    if(!out || !out.title){ toast("Couldn't make that page out"); return; }
+    r.title = out.title;
+    r.serves = out.serves || r.serves;
+    r.category = RECIPE_CATS.indexOf(out.category) !== -1 ? out.category : r.category;
+    r.prepMins = out.prepMins || r.prepMins;
+    r.cookMins = out.cookMins || r.cookMins;
+    if(out.ingredients && out.ingredients.length){
+      r.ingredients = out.ingredients;
+      out.ingredients.forEach(function(g){ learnFood(g.name || g, {use:"recipe"}); });
+    }
+    if(out.steps && out.steps.length) r.steps = out.steps;
+    r.needsRead = false;
+    r.source = "Scanned";
+    refreshFoodOptions(); save(); openRecipe(id);
+    toast("Recovered: " + r.title);
+  }catch(e){
+    toast(e.message === "bad-key" ? "That API key was rejected" : "Couldn't read that page");
+  }
+}
+
+/* ═══ BACKUP NUDGE ═════════════════════════════════════════
+   Everything lives on this device, so a reminder beats a
+   post-mortem. Shown when there is real data to lose and it
+   has been a fortnight, or after a big change.
+   ═════════════════════════════════════════════════════════ */
+var NUDGE_DAYS = 14;
+function daysSinceExport(){
+  if(!S.lastExport) return null;
+  return Math.floor((Date.now() - S.lastExport) / 86400000);
+}
+function backupDue(){
+  var weight = S.recipes.length + S.members.length + S.cupboard.length;
+  if(weight < 3) return false;
+  var d = daysSinceExport();
+  return d === null || d >= NUDGE_DAYS;
+}
+function noteExport(){ S.lastExport = Date.now(); save(); renderBackupNudge(); }
+function renderBackupNudge(){
+  var els = [document.getElementById("nudge-plan"), document.getElementById("nudge-settings")];
+  var due = backupDue();
+  var d = daysSinceExport();
+  var msg = d === null
+    ? "You've never exported a backup. Everything here lives on this phone only."
+    : "Last backup was " + d + " days ago.";
+  els.forEach(function(el){
+    if(!el) return;
+    el.hidden = !due;
+    if(due){
+      el.innerHTML = '<b>Back up your data.</b> ' + esc(msg)
+        + ' <span style="text-decoration:underline" onclick="goTab(\'settings\')">Open Settings</span>';
+    }
+  });
+  var state = document.getElementById("backup-state");
+  if(state) state.textContent = d === null ? "No backup taken yet."
+    : "Last backup " + (d === 0 ? "today" : d + " days ago") + ".";
 }
 
 </script>
@@ -2446,6 +2767,8 @@ function renderAppearance(){
 function renderSettings(){
   renderAppearance();
   renderStorage();
+  renderBackupNudge();
+  renderRecovery();
   var ws = document.getElementById("set-weekstart");
   ws.innerHTML = DAYS.map(d => '<option' + (d===S.weekStart?" selected":"") + '>' + d + '</option>').join("");
   document.getElementById("set-slots").innerHTML = ALL_SLOTS.map(sl =>
@@ -2514,6 +2837,7 @@ function exportData(){
   a.download = "meal-planner-backup-" + new Date().toISOString().slice(0,10) + ".json";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  noteExport();
   toast("Backup saved — the API key is not included");
 }
 /* Photos live outside the main data, so a full backup has to gather
@@ -2534,11 +2858,18 @@ function exportFull(){
     a.download = "meal-planner-full-" + new Date().toISOString().slice(0,10) + ".json";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+    noteExport();
     toast("Full backup saved (" + Math.round(json.length / 1024 / 1024 * 10) / 10 + "MB)");
   });
 }
 function importData(ev){
   var f = ev.target.files[0]; if(!f) return;
+  var have = S.recipes.length;
+  if(have && !confirm("This REPLACES everything on this phone — it does not merge.\n\n"
+      + "You currently have " + have + " recipe" + (have === 1 ? "" : "s")
+      + ". They will be removed.\n\nContinue?")){
+    ev.target.value = ""; return;
+  }
   var r = new FileReader();
   r.onload = e => {
     try{
@@ -2591,6 +2922,7 @@ function wipeAll(){
     if(!S.foods || !Object.keys(S.foods).length) seedCatalogue();
     refreshFoodOptions();
     requestPersistence();
+    renderBackupNudge();
     migratePhotosToIDB().then(function(n){
       if(n){ renderRecipes(); toast(n + " photos moved to roomier storage"); }
     }).catch(function(){});
