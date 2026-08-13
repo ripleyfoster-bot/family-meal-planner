@@ -514,7 +514,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.14";
+var VERSION = "2026.08.15";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -654,6 +654,57 @@ function modeCategory(mode){
    that category, and those categories never leak into other meals —
    otherwise a pudding turns up as a suggestion for Tuesday lunch. */
 var OWN_LIST_SLOTS = {"Snack":"Snack", "Treat":"Treat meal"};
+/* A saved recipe was only ever filtered on category, so a dish full of
+   mushrooms still turned up for someone who dislikes mushrooms.
+   Allergies exclude it outright; dislikes push it down and get labelled. */
+/* Deliberately broader than the store-cupboard match. There, a false
+   positive means missing a purchase; here it means eating something you
+   dislike or are allergic to, so err towards flagging. "chestnut
+   mushrooms" mentions "mushroom"; "peanut butter" mentions "peanut". */
+function mentions(ingredient, term){
+  if(!ingredient || !term) return false;
+  var iw = ingredient.split(" "), tw = term.split(" ");
+  return tw.every(function(w){ return iw.indexOf(w) !== -1; });
+}
+function recipeConflicts(r, day, slot){
+  var out = {allergy:[], dislike:[]};
+  var ings = (r.ingredients || []).map(function(g){
+    return normalise(typeof g === "object" ? g.name : g);
+  }).filter(Boolean);
+  if(!ings.length) return out;
+  eatersFor(day, slot).forEach(function(m){
+    (m.allergies || []).forEach(function(a){
+      var an = normalise(a);
+      if(an && ings.some(function(i){ return mentions(i, an); })){
+        out.allergy.push({who:m.name, food:a});
+      }
+    });
+    (m.dislikes || []).forEach(function(p){
+      var pn = normalise(p.food);
+      if(pn && ings.some(function(i){ return mentions(i, pn); })){
+        out.dislike.push({who:m.name, food:p.food});
+      }
+    });
+  });
+  return out;
+}
+/* Group on the normalised food so "Mushrooms" and "mushroom" from two
+   different people read as one line, not two. */
+function conflictLabel(cf){
+  if(!cf.dislike.length) return "";
+  var groups = {};
+  cf.dislike.forEach(function(d){
+    var k = normalise(d.food);
+    if(!groups[k]) groups[k] = {label:d.food, who:[]};
+    if(groups[k].who.indexOf(d.who) === -1) groups[k].who.push(d.who);
+  });
+  return Object.keys(groups).map(function(k){
+    var g = groups[k], n = g.who.length;
+    var who = n === 1 ? g.who[0]
+            : g.who.slice(0, -1).join(", ") + " & " + g.who[n-1];
+    return "Contains " + g.label.toLowerCase() + " — " + who + " dislike" + (n > 1 ? "" : "s") + " it";
+  }).join(" · ");
+}
 function recipesForSlot(slot, day){
   var cell = ensureCell(day, slot);
   var own = OWN_LIST_SLOTS[slot];
@@ -663,10 +714,13 @@ function recipesForSlot(slot, day){
   var wanted = {};
   eatersFor(day, slot).forEach(function(m){ wanted[modeCategory(cell.modes[m.id] || m.mode)] = true; });
   var pool = S.recipes.filter(function(r){ return !reserved[r.category]; });
-  /* Anything matching someone's plan floats to the top; the rest still show. */
-  return pool.sort(function(a, b){
-    return (wanted[b.category] ? 1 : 0) - (wanted[a.category] ? 1 : 0);
-  });
+  /* Never offer something an eater is allergic to. */
+  pool = pool.filter(function(r){ return !recipeConflicts(r, day, slot).allergy.length; });
+  /* Matching someone's plan floats up; anything with a disliked ingredient sinks. */
+  function score(r){
+    return (wanted[r.category] ? 2 : 0) - (recipeConflicts(r, day, slot).dislike.length ? 3 : 0);
+  }
+  return pool.sort(function(a, b){ return score(b) - score(a); });
 }
 
 var APPROVED_SITES = [
@@ -1022,10 +1076,15 @@ function slotBody(day, slot, cell, eating){
     h += '<div class="sec-hd" style="margin-top:14px">'
        + (slot === "Treat" ? "Your treats" : slot === "Snack" ? "Your snacks" : "From your recipes") + '</div>';
     saved.slice(0,8).forEach(r => {
+      var cf = recipeConflicts(r, day, slot);
+      var warn = conflictLabel(cf);
       h += '<div class="sug" onclick="event.stopPropagation();chooseSaved(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + r.id + '\')">'
          + '<div class="st">' + esc(r.title) + '</div>'
          + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves)
-         + (totalMins(r) ? ' · ' + fmtMins(totalMins(r)) : "") + '</div></div>';
+         + (totalMins(r) ? ' · ' + fmtMins(totalMins(r)) : "") + '</div>'
+         + (warn ? '<div class="cupboard-flag" style="margin-top:6px;display:inline-block;white-space:normal">'
+                   + esc(warn) + '</div>' : "")
+         + '</div>';
     });
   } else if(OWN_LIST_SLOTS[slot]){
     h += '<div class="hint" style="margin-top:14px">Nothing saved under <b>' + esc(OWN_LIST_SLOTS[slot])
@@ -1314,7 +1373,12 @@ async function callClaude(system, content, maxTokens, opts){
   if(!res.ok){
     var t = await res.text();
     if(res.status === 401) throw new Error("bad-key");
-    throw new Error("HTTP " + res.status + " " + t.slice(0,120));
+    var why = "";
+    try{ var j = JSON.parse(t); why = (j.error && j.error.message) || ""; }catch(e){ why = t.slice(0,140); }
+    var err = new Error(why || ("HTTP " + res.status));
+    err.status = res.status;
+    err.toolFault = /tool|web_search|not.*enabled|unsupported/i.test(why);
+    throw err;
   }
   var data = await res.json();
   var raw = (data.content || []).map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
@@ -1334,6 +1398,7 @@ async function loadSuggestions(day, slot){
   }
   var cell = ensureCell(day, slot);
   var eating = eatersFor(day, slot);
+  var searchOff = false;
   var btn = document.getElementById("load-" + (day+slot).replace(/\W/g,""));
   if(btn){ btn.disabled = true; btn.innerHTML = '<span class="pulse">Finding options…</span>'; }
 
@@ -1399,10 +1464,18 @@ async function loadSuggestions(day, slot){
     + 'texture, how to serve it — so the cook knows what they are aiming for.';
 
   try{
-    var parsed = await callClaude(system,
-      "Suggest " + slot + " options for " + day + ". " + (eating.length||1) + " eating."
-      + (diets.length ? " Diets: " + diets.join(", ") : ""),
-      1600, {search: !OWN_LIST_SLOTS[slot]});
+    var ask = "Suggest " + slot + " options for " + day + ". " + (eating.length||1) + " eating."
+      + (diets.length ? " Diets: " + diets.join(", ") : "");
+    var parsed;
+    try{
+      parsed = await callClaude(system, ask, 1600, {search: !OWN_LIST_SLOTS[slot]});
+    }catch(e1){
+      /* Web search is an optional extra on the account. If it is not
+         available, the suggestions still work — just without links. */
+      if(e1.message === "bad-key" || e1.message === "no-key") throw e1;
+      parsed = await callClaude(system, ask, 1600, {search:false});
+      searchOff = true;
+    }
     cell.suggestions = parsed.recipes || [];
     cell.suggestions.forEach(s => { if(stds.includes(s.title)) s.is_standard = true; });
     cell.loaded = true;
@@ -1410,8 +1483,10 @@ async function loadSuggestions(day, slot){
     cell.loaded = false;
     toast(e.message === "bad-key" ? "That API key was rejected — check Settings"
         : e.message === "no-key" ? "Add your API key in Settings"
-        : "Couldn't reach Claude — check your connection");
+        : e.status ? "Claude said: " + String(e.message).slice(0, 90)
+        : "Couldn't reach Claude — no network");
   }
+  if(searchOff) toast("Suggested without web search — links may be missing");
   save(); renderPlan();
 }
 
