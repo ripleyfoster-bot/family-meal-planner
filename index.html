@@ -518,7 +518,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.17";
+var VERSION = "2026.08.18";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -874,6 +874,8 @@ function guessAisle(name){
   var map = [
     ["household", /\b(foil|cling film|bin bag|kitchen roll|kitchen towel|washing|soap|detergent|sponge|batterie|battery)\b/],
     ["frozen",    /\bfrozen\b|\b(ice cream|fish finger|oven chip)\b/],
+    ["drinks",    /\b(cola|lemonade|tango|fanta|pepsi|sprite|irn bru|squash|cordial|tonic|fizzy|smoothie|milkshake|lager|ale|cider|prosecco|juice)\b/],
+    ["spices",    /\b(olive oil|vegetable oil|rapeseed oil|sunflower oil|sesame oil|coconut oil|vinegar)\b/],
     ["produce",   /\b(onion|garlic|potato|carrot|tomato|pepper|lettuce|spinach|kale|broccoli|cauliflower|courgette|aubergine|mushroom|cucumber|celery|leek|apple|banana|lemon|lime|orange|berry|avocado|pea|cabbage|sweetcorn|salad|herb|parsley|coriander|basil|ginger|chilli|squash|swede|parsnip|beetroot|grape|melon|pear|peach|spring onion|shallot)\b/],
     ["meat",      /\b(chicken|beef|pork|lamb|mince|bacon|sausage|steak|turkey|ham|salmon|cod|tuna|prawn|haddock|fish|gammon|chorizo|duck|liver)\b/],
     ["chilled",   /\b(milk|butter|cheese|yogurt|yoghurt|cream|egg|creme fraiche|mozzarella|cheddar|parmesan|feta|halloumi|quark|margarine|pastry|houmou|hummu)\b/],
@@ -1190,7 +1192,7 @@ function addIngredients(list, mealTitle){
     var staple = inCupboard(p.name);
     var item = {
       id: uid(), name: p.name, qty: p.qty, unit: p.unit,
-      aisle: resolveAisle(staple ? staple.aisle : guessAisle(p.name)),
+      aisle: resolveAisle(staple ? staple.aisle : aisleFor(p.name)),
       status: staple ? "have" : "need",
       fromCupboard: !!staple, meals: [mealTitle], manual: false, extra: [],
       price: null, priceGuess: false
@@ -1212,7 +1214,7 @@ function addShopManual(){
   var p = parseIngredient(v);
   var picked = document.getElementById("shop-manual-aisle").value;
   S.shop.push({id:uid(), name:p.name, qty:p.qty, unit:p.unit,
-               aisle:resolveAisle(picked === "auto" ? guessAisle(p.name) : picked),
+               aisle:resolveAisle(picked === "auto" ? aisleFor(p.name) : picked),
                status:"need", fromCupboard:false, meals:[], manual:true, extra:[],
                price:null, priceGuess:false});
   learnFood(p.name, {use:"shop", aisle:resolveAisle(picked === "auto" ? guessAisle(p.name) : picked)});
@@ -1283,7 +1285,8 @@ function renderShop(){
       html += '<div class="shop-row ' + (i.status === "bought" ? "bought" : i.status === "have" ? "have" : "") + '">'
         + '<div class="chk' + (i.status === "bought" ? " done" : "") + '" onclick="cycleStatus(\'' + i.id + '\')">'
         + (i.status === "bought" ? "✓" : "") + '</div>'
-        + '<div class="grow"><div class="nm">' + esc(i.name) + (q ? ' <span class="qty">' + esc(q) + '</span>' : "") + '</div>'
+        + '<div class="grow" onclick="toggleShopEditor(\'' + i.id + '\')" style="cursor:pointer">'
+        + '<div class="nm">' + esc(i.name) + (q ? ' <span class="qty">' + esc(q) + '</span>' : "") + '</div>'
         + (meals ? '<div class="mt">' + esc(meals) + '</div>' : "") + '</div>'
         + (i.status === "have"
             ? '<span class="cupboard-flag">In cupboard</span><button class="mini" onclick="setStatus(\'' + i.id + '\',\'need\')">Need it</button>'
@@ -1293,7 +1296,8 @@ function renderShop(){
             : '<button class="mini' + (i.priceGuess ? " mut" : "") + '" onclick="editPrice(\'' + i.id + '\')">'
               + (i.price == null ? "£ —" : money(i.price)) + '</button>')
         + '<button class="xdel" onclick="delShopItem(\'' + i.id + '\')" aria-label="Remove">×</button>'
-        + '</div>';
+        + '</div>'
+        + (editingShop === i.id ? shopEditorHtml(i) : "");
     });
   });
   el.innerHTML = html;
@@ -1318,8 +1322,11 @@ function renderCupboard(){
     var items = groups[a.id]; if(!items) return;
     html += '<div class="aisle-hd">' + esc(a.name) + '</div>';
     items.forEach(c => {
-      html += '<div class="shop-row"><div class="grow"><div class="nm">' + esc(c.name) + '</div></div>'
-        + '<button class="xdel" onclick="delCupboard(\'' + c.id + '\')" aria-label="Remove">×</button></div>';
+      var open = editingCup === c.id;
+      html += '<div class="shop-row" onclick="toggleCupEditor(\'' + c.id + '\')" style="cursor:pointer">'
+        + '<div class="grow"><div class="nm">' + esc(c.name) + '</div></div>'
+        + '<span class="chev">' + (open ? "\u2304" : "\u203a") + '</span></div>'
+        + (open ? cupEditorHtml(c) : "");
     });
   });
   el.innerHTML = html;
@@ -1329,7 +1336,7 @@ function addCupboard(){
   if(!v) return;
   v.split(",").map(x => x.trim()).filter(Boolean).forEach(name => {
     if(S.cupboard.some(c => normalise(c.name) === normalise(name))) return;
-    S.cupboard.push({id:uid(), name:name, aisle:guessAisle(name)});
+    S.cupboard.push({id:uid(), name:name, aisle:aisleFor(name)});
     learnFood(name, {use:"cupboard"});
   });
   inp.value = ""; refreshFoodOptions(); save(); renderCupboard();
@@ -1341,7 +1348,7 @@ function seedCupboard(){
    "cumin","paprika","dried oregano","curry powder","vinegar","soy sauce","butter","milk","eggs"]
     .forEach(name => {
       if(S.cupboard.some(c => normalise(c.name) === normalise(name))) return;
-      S.cupboard.push({id:uid(), name:name, aisle:guessAisle(name)});
+      S.cupboard.push({id:uid(), name:name, aisle:aisleFor(name)});
     });
   save(); renderCupboard(); toast("Staples added — trim anything you don't keep");
 }
@@ -2792,6 +2799,97 @@ function addIngredientRow(rid){
   r.ingredients.push({name:"", qty:"", unit:""});
   editingIng = {rid:rid, idx:r.ingredients.length - 1};
   save(); openRecipe(rid);
+}
+
+/* ═══ AISLE CORRECTIONS ════════════════════════════════════
+   Guessing from the name will always get some wrong — "Orange
+   Tango" reads as fruit however many rules I add. So the aisle
+   is editable everywhere, and a correction is remembered
+   against the food itself, so it lands right next time.
+   ═════════════════════════════════════════════════════════ */
+function learnAisle(name, aisleId){
+  var key = learnFood(name, {aisle:aisleId});
+  if(!key) return;
+  S.foods[key].aisle = aisleId;
+  S.foods[key].aisleFixed = true;
+  /* Bring anything already filed under that food into line. */
+  S.shop.forEach(function(i){ if(normalise(i.name) === key) i.aisle = resolveAisle(aisleId); });
+  S.cupboard.forEach(function(c){ if(normalise(c.name) === key) c.aisle = aisleId; });
+}
+/* A remembered correction beats the guesser. */
+function aisleFor(name){
+  var f = S.foods[normalise(name)];
+  if(f && f.aisleFixed && f.aisle) return f.aisle;
+  return guessAisle(name);
+}
+
+var editingCup = null;
+function toggleCupEditor(id){
+  editingCup = editingCup === id ? null : id;
+  renderCupboard();
+}
+function cupEditorHtml(c){
+  return '<div class="card" style="margin:6px 13px 10px;background:var(--accent-soft)">'
+    + '<label class="fld">Item</label>'
+    + '<input type="text" id="cup-name" list="food-options" value="' + esc(c.name) + '">'
+    + '<label class="fld">Aisle</label>'
+    + '<select id="cup-aisle">'
+    + storeAisles().map(function(a){
+        return '<option value="' + esc(a.id) + '"' + (a.id === c.aisle ? " selected" : "") + '>'
+             + esc(a.name) + '</option>'; }).join("")
+    + '</select>'
+    + '<div class="row" style="margin-top:12px">'
+    + '<button class="btn ghost sm" onclick="toggleCupEditor(\'' + c.id + '\')">Cancel</button>'
+    + '<button class="btn sm" onclick="saveCupboardItem(\'' + c.id + '\')">Save</button></div>'
+    + '<button class="btn wide danger sm" style="margin-top:8px" onclick="delCupboard(\'' + c.id + '\')">Remove</button>'
+    + '</div>';
+}
+function saveCupboardItem(id){
+  var c = S.cupboard.find(function(x){ return x.id === id; }); if(!c) return;
+  var name = document.getElementById("cup-name").value.trim();
+  if(!name){ toast("Give it a name, or remove it"); return; }
+  var aisle = document.getElementById("cup-aisle").value;
+  c.name = name; c.aisle = aisle;
+  learnAisle(name, aisle);
+  editingCup = null;
+  refreshFoodOptions(); save(); renderCupboard();
+  toast("Saved — " + aisleName(aisle) + " from now on");
+}
+
+var editingShop = null;
+function toggleShopEditor(id){
+  editingShop = editingShop === id ? null : id;
+  renderShop();
+}
+function shopEditorHtml(i){
+  return '<div class="card" style="margin:6px 13px 10px;background:var(--accent-soft)">'
+    + '<label class="fld">Item</label>'
+    + '<div class="row tight">'
+    + '<input type="text" id="shp-qty" value="' + esc([i.qty, i.unit].filter(Boolean).join(" "))
+    + '" placeholder="2" style="max-width:34%">'
+    + '<input type="text" id="shp-name" list="food-options" value="' + esc(i.name) + '"></div>'
+    + '<label class="fld">Aisle</label>'
+    + '<select id="shp-aisle">'
+    + storeAisles().map(function(a){
+        return '<option value="' + esc(a.id) + '"' + (a.id === i.aisle ? " selected" : "") + '>'
+             + esc(a.name) + '</option>'; }).join("")
+    + '</select>'
+    + '<div class="row" style="margin-top:12px">'
+    + '<button class="btn ghost sm" onclick="toggleShopEditor(\'' + i.id + '\')">Cancel</button>'
+    + '<button class="btn sm" onclick="saveShopItem(\'' + i.id + '\')">Save</button></div>'
+    + '</div>';
+}
+function saveShopItem(id){
+  var i = S.shop.find(function(x){ return x.id === id; }); if(!i) return;
+  var name = document.getElementById("shp-name").value.trim();
+  if(!name){ toast("Give it a name, or remove it"); return; }
+  var aisle = document.getElementById("shp-aisle").value;
+  var p = parseIngredient((document.getElementById("shp-qty").value.trim() + " " + name).trim());
+  i.name = p.name || name; i.qty = p.qty; i.unit = p.unit; i.aisle = aisle;
+  learnAisle(i.name, aisle);
+  editingShop = null;
+  refreshFoodOptions(); save(); renderShop();
+  toast("Saved — " + aisleName(aisle) + " from now on");
 }
 
 </script>
