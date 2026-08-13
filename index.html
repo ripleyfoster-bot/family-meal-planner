@@ -518,7 +518,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.18";
+var VERSION = "2026.08.19";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1385,42 +1385,66 @@ function copyShopList(){ copyText(shopListText(), "List copied"); }
 function haveKey(){ return !!(S.apiKey && S.apiKey.trim()); }
 async function callClaude(system, content, maxTokens, opts){
   if(!haveKey()) throw new Error("no-key");
-  var res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "x-api-key":S.apiKey.trim(),
-      "anthropic-version":"2023-06-01",
-      "anthropic-dangerous-direct-browser-access":"true"
-    },
-    body:JSON.stringify(Object.assign(
-      {model:MODEL, max_tokens:maxTokens||1200, system:system,
-       messages:[{role:"user", content:content}]},
-      opts && opts.search ? {tools:[{type:"web_search_20250305", name:"web_search"}]} : {}))
-  });
-  if(!res.ok){
-    var t = await res.text();
-    if(res.status === 401) throw new Error("bad-key");
-    var why = "";
-    try{ var j = JSON.parse(t); why = (j.error && j.error.message) || ""; }catch(e){ why = t.slice(0,140); }
-    var err = new Error(why || ("HTTP " + res.status));
-    err.status = res.status;
-    err.toolFault = /tool|web_search|not.*enabled|unsupported/i.test(why);
-    throw err;
+  var messages = [{role:"user", content:content}];
+  var collected = "";
+
+  /* A server-side web search can pause the turn part way through. When it
+     does, the reply carries stop_reason "pause_turn" and no finished answer
+     — you have to hand its own output back and let it carry on. Without
+     this the response looks empty and reads as a connection failure. */
+  for(var round = 0; round < 4; round++){
+    var body = {
+      model: MODEL,
+      max_tokens: maxTokens || 1200,
+      system: system,
+      messages: messages
+    };
+    if(opts && opts.search) body.tools = [{type:"web_search_20250305", name:"web_search"}];
+
+    var res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key":S.apiKey.trim(),
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify(body)
+    });
+
+    if(!res.ok){
+      var t = await res.text();
+      if(res.status === 401) throw new Error("bad-key");
+      var why = "";
+      try{ var j = JSON.parse(t); why = (j.error && j.error.message) || ""; }catch(e){ why = t.slice(0,140); }
+      var err = new Error(why || ("HTTP " + res.status));
+      err.status = res.status;
+      throw err;
+    }
+
+    var data = await res.json();
+    collected += (data.content || []).map(function(b){ return b.text || ""; }).join("");
+
+    if(data.stop_reason === "pause_turn"){
+      messages = messages.concat([{role:"assistant", content:data.content}]);
+      continue;                       // let it finish what it started
+    }
+    if(data.stop_reason === "max_tokens"){
+      var cut = new Error("The reply ran out of room — try again, or ask for fewer recipes.");
+      cut.truncated = true;
+      throw cut;
+    }
+    break;
   }
-  var data = await res.json();
-  var raw = (data.content || []).map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
-  if(data.stop_reason === "max_tokens"){
-    var cut = new Error("The reply was cut short — asking for fewer recipes usually fixes it.");
-    cut.truncated = true;
-    throw cut;
-  }
+
+  var raw = collected.replace(/```json|```/g, "").trim();
   try{ return JSON.parse(raw); }
   catch(e){
-    /* With search on, the model may wrap the JSON in prose. Take the outermost object. */
+    /* With search on, the model often wraps the JSON in commentary. */
     var a = raw.indexOf("{"), b = raw.lastIndexOf("}");
     if(a === -1 || b <= a){
-      var bad = new Error("Claude's reply wasn't in the expected format.");
+      var bad = new Error(raw ? "Claude replied but not in the expected format."
+                              : "Claude returned an empty reply.");
       bad.parseFail = true;
       throw bad;
     }
@@ -1432,6 +1456,7 @@ async function callClaude(system, content, maxTokens, opts){
     }
   }
 }
+
 
 async function loadSuggestions(day, slot){
   if(!haveKey()){
@@ -2687,6 +2712,21 @@ async function testConnection(){
     lines.push("");
     lines.push("The request never left the phone. Check you are online, and that no content blocker or "
              + "VPN is stopping api.anthropic.com.");
+  }
+
+  if(plain.ok){
+    lines.push("");
+    lines.push("Trying a real suggestion call…");
+    try{
+      var probe = await callClaude(
+        "Reply with valid JSON only, no other text: {\"recipes\":[{\"title\":\"\",\"steps\":[\"\"]}]}",
+        "Give one simple UK dinner with a three step method.", 3000, {search:true});
+      lines.push("PASS — full call returned " + ((probe.recipes || []).length) + " recipe(s)");
+    }catch(pe){
+      lines.push("FAIL — full call: " + String(pe.message).slice(0, 200));
+      if(pe.parseFail) lines.push("   The reply arrived but was not usable JSON.");
+      if(pe.truncated) lines.push("   The reply was cut off before it finished.");
+    }
   }
 
   lines.push("");
