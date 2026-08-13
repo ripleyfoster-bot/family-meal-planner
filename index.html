@@ -266,6 +266,9 @@ body.dark .rmeta span{color:var(--ink);}
       </div>
       <label class="fld">Usual eating mode</label>
       <div class="chips" id="md-diet"></div>
+      <label class="fld">Colour</label>
+      <div class="chips" id="md-colour"></div>
+      <div class="hint" style="margin-top:6px">Faded ones are already taken by someone else.</div>
     </div>
     <div class="sec-hd">Meals they eat</div>
     <div class="card"><div class="chips" id="md-slots"></div>
@@ -511,7 +514,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.13";
+var VERSION = "2026.08.14";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -520,7 +523,28 @@ var DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunda
 var ALL_SLOTS = ["Breakfast","Brunch","Lunch","Dinner","Tea","Supper","Snack","Treat"];
 var MODES = ["Standard","Slimming World","Low carb / HP","Fasting","Making own","Skip"];
 var RECIPE_CATS = ["Slimming World","Low carb / HP","General eating","Snack","Treat meal"];
-var AVATAR_COLOURS = ["#0F6E56","#3C3489","#A32D2D","#633806","#042C53","#712B13"];
+var AVATAR_COLOURS = ["#0F6E56","#3C3489","#A32D2D","#633806","#042C53","#712B13","#8A5C36","#2E7A62"];
+/* Pick a colour nobody else is using, rather than one based on position —
+   position breaks as soon as members are removed or restored from a backup. */
+function freeColour(exceptId){
+  var taken = {};
+  S.members.forEach(function(m){ if(m.id !== exceptId && m.colour) taken[m.colour.toLowerCase()] = true; });
+  for(var i = 0; i < AVATAR_COLOURS.length; i++){
+    if(!taken[AVATAR_COLOURS[i].toLowerCase()]) return AVATAR_COLOURS[i];
+  }
+  return AVATAR_COLOURS[S.members.length % AVATAR_COLOURS.length];
+}
+/* One-off tidy for households where everyone ended up the same colour. */
+function fixDuplicateColours(){
+  var seen = {}, changed = false;
+  S.members.forEach(function(m){
+    var c = (m.colour || "").toLowerCase();
+    if(!c || seen[c]){ m.colour = freeColour(m.id); changed = true; }
+    seen[(m.colour || "").toLowerCase()] = true;
+  });
+  if(changed) save();
+  return changed;
+}
 
 /* Aisles are identified by a stable id so they can be renamed, reordered
    and deleted per shop without breaking items already on the list. */
@@ -2517,7 +2541,7 @@ function saveMember(){
   var name = document.getElementById("nm-name").value.trim();
   if(!name){ toast("Name needed"); return; }
   S.members.push({id:uid(), name:name, mode:chipVal("nm-diet") || "Standard",
-    colour:AVATAR_COLOURS[S.members.length % AVATAR_COLOURS.length],
+    colour:freeColour(null),
     likes:[], dislikes:[], allergies:[]});
   closeAddMember(); save(); renderMembers();
 }
@@ -2536,12 +2560,24 @@ function renderMemberDetail(){
   document.getElementById("md-mode").textContent = m.mode;
   document.getElementById("md-diet").innerHTML = MODES.map(o =>
     '<div class="chip' + (o===m.mode?" on":"") + '" onclick="setMemberMode(\'' + esc(o) + '\')">' + esc(o) + '</div>').join("");
+  document.getElementById("md-colour").innerHTML = AVATAR_COLOURS.map(function(col){
+    var used = S.members.some(function(x){
+      return x.id !== m.id && (x.colour || "").toLowerCase() === col.toLowerCase(); });
+    return '<button class="swatch' + (col.toLowerCase() === (m.colour||"").toLowerCase() ? " on" : "") + '"'
+      + ' aria-label="' + esc(col) + '"'
+      + ' style="background:' + col + (used ? ";opacity:.35" : "") + '"'
+      + ' onclick="setMemberColour(\'' + col + '\')"></button>';
+  }).join("");
   var own = S.memberSlots[m.id] || [];
   document.getElementById("md-slots").innerHTML = ALL_SLOTS.map(sl =>
     '<div class="chip' + (own.includes(sl)?" on":"") + '" onclick="toggleMemberSlot(\'' + esc(sl) + '\')">' + esc(sl) + '</div>').join("");
   renderAllergies(); renderPrefs("like"); renderPrefs("dislike");
 }
 function setMemberMode(v){ var m = me(); if(!m) return; m.mode = v; save(); renderMemberDetail(); }
+function setMemberColour(c){
+  var m = me(); if(!m) return;
+  m.colour = c; save(); renderMemberDetail();
+}
 function toggleMemberSlot(sl){
   var m = me(); if(!m) return;
   var arr = S.memberSlots[m.id] || [];
@@ -2922,6 +2958,7 @@ function wipeAll(){
     if(!S.foods || !Object.keys(S.foods).length) seedCatalogue();
     refreshFoodOptions();
     requestPersistence();
+    fixDuplicateColours();
     renderBackupNudge();
     migratePhotosToIDB().then(function(n){
       if(n){ renderRecipes(); toast(n + " photos moved to roomier storage"); }
