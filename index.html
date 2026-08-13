@@ -202,7 +202,8 @@ body.dark .rmeta span{color:var(--ink);}
 .step .no{width:23px;height:23px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
   font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .step .tx{flex:1;font-size:14.5px;line-height:1.5;}
-.ing{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
+.ing{display:flex;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
+.ing .grow{flex:1;min-width:0;}
 .ing:last-child{border-bottom:none;}
 .ing .q{color:var(--muted);min-width:64px;font-size:13px;}
 .banner{background:var(--warn);color:var(--warn-ink);border-radius:var(--r-sm);
@@ -456,6 +457,9 @@ body.dark .rmeta span{color:var(--ink);}
       <button class="btn sm" onclick="saveKey()">Save key</button>
     </div>
     <div class="hint" id="key-state" style="margin-top:9px"></div>
+    <button class="btn wide ghost sm" style="margin-top:9px" onclick="testConnection()">Test connection</button>
+    <pre id="diag-out" class="hint" style="margin-top:9px;white-space:pre-wrap;word-break:break-word;
+      font-family:ui-monospace,Menlo,monospace;font-size:11.5px"></pre>
   </div>
 
   <div class="sec-hd">This week's menu</div>
@@ -514,7 +518,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.16";
+var VERSION = "2026.08.17";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -2095,10 +2099,18 @@ function openRecipe(id){
 
     + '<div class="sec-hd">Ingredients</div><div class="card">'
     + ((r.ingredients || []).length
-        ? (r.ingredients || []).map(function(g){ var l = ingLine(g);
-            return '<div class="ing"><span class="q">' + esc(l.q || "—") + '</span><span>' + esc(l.n) + '</span></div>'; }).join("")
+        ? (r.ingredients || []).map(function(g, i){ var l = ingLine(g);
+            var open = editingIng && editingIng.rid === r.id && editingIng.idx === i;
+            var sw = swapsFor(l.n);
+            return '<div class="ing" onclick="toggleIngEditor(\'' + r.id + '\',' + i + ')" style="cursor:pointer">'
+              + '<span class="q">' + esc(l.q || "\u2014") + '</span>'
+              + '<span class="grow">' + esc(l.n) + '</span>'
+              + (sw.length ? '<span class="mini mut" style="padding:0">swap</span>' : "")
+              + '<span class="chev">' + (open ? "\u2304" : "\u203a") + '</span></div>'
+              + (open ? ingEditorHtml(r, i) : ""); }).join("")
         : '<div class="hint">None recorded.</div>')
     + '</div>'
+    + '<button class="btn wide ghost sm" onclick="addIngredientRow(\'' + r.id + '\')">+ Add an ingredient</button>'
     + '<button class="btn wide ghost sm" onclick="recipeToShop(\'' + r.id + '\')">Add ingredients to shopping list</button>'
 
     + '<div class="sec-hd">Method</div><div class="card">'
@@ -2605,6 +2617,181 @@ function renderBackupNudge(){
   var state = document.getElementById("backup-state");
   if(state) state.textContent = d === null ? "No backup taken yet."
     : "Last backup " + (d === 0 ? "today" : d + " days ago") + ".";
+}
+
+/* ═══ CONNECTION TEST ══════════════════════════════════════
+   Guessing at failures from a one-line toast has not worked.
+   This makes the smallest possible call and reports exactly
+   what came back, then repeats it with the web search tool so
+   we can see whether that is the thing breaking it.
+   ═════════════════════════════════════════════════════════ */
+async function rawCall(withSearch, model){
+  var body = {
+    model: model || MODEL,
+    max_tokens: 16,
+    messages: [{role:"user", content:"Reply with the single word: ok"}]
+  };
+  if(withSearch) body.tools = [{type:"web_search_20250305", name:"web_search"}];
+  var res;
+  try{
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key":(S.apiKey || "").trim(),
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify(body)
+    });
+  }catch(netErr){
+    return {ok:false, stage:"network", detail:String(netErr && netErr.message || netErr)};
+  }
+  var text = await res.text();
+  if(!res.ok){
+    var msg = text;
+    try{ var j = JSON.parse(text); msg = (j.error && (j.error.type + ": " + j.error.message)) || text; }catch(e){}
+    return {ok:false, stage:"http " + res.status, detail:String(msg).slice(0, 300)};
+  }
+  var out;
+  try{ out = JSON.parse(text); }catch(e){ return {ok:false, stage:"parse", detail:text.slice(0,200)}; }
+  return {ok:true, stage:"ok", detail:"model " + (out.model || "?") + ", stop " + (out.stop_reason || "?")};
+}
+
+async function testConnection(){
+  var el = document.getElementById("diag-out");
+  if(!haveKey()){ el.innerHTML = '<b>No API key saved.</b> Add one above first.'; return; }
+  el.innerHTML = '<span class="pulse">Testing…</span>';
+  var lines = [];
+
+  var plain = await rawCall(false);
+  lines.push((plain.ok ? "PASS" : "FAIL") + " — basic call (" + plain.stage + ")");
+  if(!plain.ok) lines.push("   " + plain.detail);
+
+  if(plain.ok){
+    var searched = await rawCall(true);
+    lines.push((searched.ok ? "PASS" : "FAIL") + " — with web search (" + searched.stage + ")");
+    if(!searched.ok) lines.push("   " + searched.detail);
+    if(plain.ok && !searched.ok){
+      lines.push("");
+      lines.push("Web search is the problem. Suggestions still work — the app falls back automatically.");
+    }
+  } else if(plain.stage === "network"){
+    lines.push("");
+    lines.push("The request never left the phone. Check you are online, and that no content blocker or "
+             + "VPN is stopping api.anthropic.com.");
+  }
+
+  lines.push("");
+  lines.push("Model in use: " + MODEL);
+  lines.push("Key length: " + (S.apiKey || "").trim().length + " characters");
+  el.textContent = lines.join("\n");
+}
+
+/* ═══ INGREDIENT SWAPS ═════════════════════════════════════
+   A recipe is a starting point, not law. Most swaps are the
+   same handful of substitutions, so they are built in and
+   work offline; anything else can be typed in directly.
+   ═════════════════════════════════════════════════════════ */
+var SWAPS = [
+  {match:["pepper","bell pepper","red pepper","green pepper","yellow pepper"],
+   with:["green beans","asparagus","courgette","tenderstem broccoli","mangetout","sugar snap peas","celery"]},
+  {match:["mushroom","chestnut mushroom","button mushroom"],
+   with:["courgette","aubergine","celery","green beans","extra onion"]},
+  {match:["onion","white onion","brown onion"], with:["shallots","leeks","spring onions","fennel"]},
+  {match:["courgette"], with:["aubergine","green beans","asparagus","peppers"]},
+  {match:["broccoli","tenderstem broccoli"], with:["green beans","cauliflower","asparagus","kale","mangetout"]},
+  {match:["green beans"], with:["asparagus","mangetout","sugar snap peas","tenderstem broccoli"]},
+  {match:["spinach"], with:["kale","chard","rocket","cavolo nero"]},
+  {match:["potato","potatoes"], with:["sweet potato","celeriac","butternut squash","cauliflower"]},
+  {match:["rice"], with:["cauliflower rice","quinoa","couscous","bulgur wheat"]},
+  {match:["pasta","spaghetti","penne"], with:["courgetti","wholewheat pasta","rice noodles","lentil pasta"]},
+  {match:["chicken breast","chicken breasts"], with:["chicken thighs","turkey breast","pork loin","firm tofu","halloumi"]},
+  {match:["chicken thigh","chicken thighs"], with:["chicken breasts","pork shoulder","lamb leg"]},
+  {match:["beef mince","mince"], with:["turkey mince","pork mince","lamb mince","green lentils","soya mince"]},
+  {match:["lamb","lamb shoulder"], with:["beef shin","pork shoulder","mutton"]},
+  {match:["cream","double cream"], with:["creme fraiche","greek yogurt","coconut milk","quark"]},
+  {match:["creme fraiche"], with:["greek yogurt","soured cream","quark"]},
+  {match:["butter"], with:["olive oil","rapeseed oil","ghee"]},
+  {match:["soured cream"], with:["greek yogurt","creme fraiche","quark"]},
+  {match:["cheddar","cheese"], with:["red leicester","gruyere","mozzarella","light cheddar"]},
+  {match:["coriander"], with:["flat-leaf parsley","basil","chives"]},
+  {match:["white wine"], with:["chicken stock","dry cider","white wine vinegar and water"]},
+  {match:["red wine"], with:["beef stock","dark ale","balsamic and stock"]},
+  {match:["chickpeas"], with:["butter beans","cannellini beans","green lentils"]},
+  {match:["prawns","prawn"], with:["white fish","chicken","firm tofu"]},
+  {match:["salmon"], with:["trout","sea bass","cod","mackerel"]}
+];
+function swapsFor(name){
+  var n = normalise(name);
+  if(!n) return [];
+  var hits = [];
+  SWAPS.forEach(function(row){
+    if(row.match.some(function(m){ return mentions(n, normalise(m)); })){
+      row.with.forEach(function(w){ if(hits.indexOf(w) === -1) hits.push(w); });
+    }
+  });
+  /* Don't offer something the household already dislikes. */
+  var bad = {};
+  S.members.forEach(function(m){
+    (m.dislikes || []).forEach(function(p){ bad[normalise(p.food)] = true; });
+    (m.allergies || []).forEach(function(a){ bad[normalise(a)] = true; });
+  });
+  return hits.filter(function(w){
+    var wn = normalise(w);
+    return !Object.keys(bad).some(function(b){ return mentions(wn, b); });
+  });
+}
+
+var editingIng = null;
+function toggleIngEditor(rid, idx){
+  editingIng = (editingIng && editingIng.rid === rid && editingIng.idx === idx) ? null : {rid:rid, idx:idx};
+  openRecipe(rid);
+}
+function ingEditorHtml(r, idx){
+  var g = ingLine(r.ingredients[idx]);
+  var opts = swapsFor(g.n);
+  return '<div class="card" style="margin:6px 0 10px;background:var(--accent-soft)">'
+    + '<label class="fld">Amount and ingredient</label>'
+    + '<div class="row tight">'
+    + '<input type="text" id="ing-qty" value="' + esc(g.q) + '" placeholder="200g" style="max-width:34%">'
+    + '<input type="text" id="ing-name" list="food-options" value="' + esc(g.n) + '"></div>'
+    + (opts.length
+        ? '<label class="fld">Swap it for</label><div class="chips">'
+          + opts.map(function(o){
+              return '<div class="chip" onclick="document.getElementById(\'ing-name\').value=\'' + esc(o) + '\'">'
+                   + esc(o) + '</div>'; }).join("")
+          + '</div>'
+        : '<div class="hint" style="margin-top:9px">No stock swaps for this one — type whatever you want instead.</div>')
+    + '<div class="row" style="margin-top:12px">'
+    + '<button class="btn ghost sm" onclick="toggleIngEditor(\'' + r.id + '\',' + idx + ')">Cancel</button>'
+    + '<button class="btn sm" onclick="saveIngredient(\'' + r.id + '\',' + idx + ')">Save</button></div>'
+    + '<button class="btn wide danger sm" style="margin-top:8px" onclick="removeIngredient(\'' + r.id + '\',' + idx + ')">Remove ingredient</button>'
+    + '</div>';
+}
+function saveIngredient(rid, idx){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  var name = document.getElementById("ing-name").value.trim();
+  if(!name){ toast("Give it a name, or remove it"); return; }
+  var qty = document.getElementById("ing-qty").value.trim();
+  var parsed = parseIngredient((qty ? qty + " " : "") + name);
+  r.ingredients[idx] = parsed;
+  learnFood(parsed.name, {use:"recipe"});
+  editingIng = null;
+  refreshFoodOptions(); save(); openRecipe(rid);
+  toast("Ingredient updated");
+}
+function removeIngredient(rid, idx){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  r.ingredients.splice(idx, 1);
+  editingIng = null;
+  save(); openRecipe(rid);
+}
+function addIngredientRow(rid){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  r.ingredients.push({name:"", qty:"", unit:""});
+  editingIng = {rid:rid, idx:r.ingredients.length - 1};
+  save(); openRecipe(rid);
 }
 
 </script>
