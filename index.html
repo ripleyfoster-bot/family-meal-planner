@@ -514,7 +514,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.15";
+var VERSION = "2026.08.16";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -666,6 +666,14 @@ function mentions(ingredient, term){
   var iw = ingredient.split(" "), tw = term.split(" ");
   return tw.every(function(w){ return iw.indexOf(w) !== -1; });
 }
+/* A stable pseudo-random nudge: same answer for the same recipe on the
+   same day, but a different order tomorrow. Keeps the list from going
+   stale without it reshuffling under your thumb. */
+function jitter(id, day, slot){
+  var s = String(id) + day + slot, h = 0;
+  for(var i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff; }
+  return (h % 1000) / 200;               // 0 to 5
+}
 function recipeConflicts(r, day, slot){
   var out = {allergy:[], dislike:[]};
   var ings = (r.ingredients || []).map(function(g){
@@ -716,9 +724,17 @@ function recipesForSlot(slot, day){
   var pool = S.recipes.filter(function(r){ return !reserved[r.category]; });
   /* Never offer something an eater is allergic to. */
   pool = pool.filter(function(r){ return !recipeConflicts(r, day, slot).allergy.length; });
-  /* Matching someone's plan floats up; anything with a disliked ingredient sinks. */
+  /* Matching someone's plan floats up; a disliked ingredient sinks it.
+     Within a band, the ones you have not cooked lately come first — a
+     fixed sort meant the same eight recipes every single time. */
+  var now = Date.now();
   function score(r){
-    return (wanted[r.category] ? 2 : 0) - (recipeConflicts(r, day, slot).dislike.length ? 3 : 0);
+    var s = (wanted[r.category] ? 20 : 0)
+          - (recipeConflicts(r, day, slot).dislike.length ? 40 : 0);
+    var days = r.lastUsed ? (now - r.lastUsed) / 86400000 : 999;
+    s += Math.min(days, 60) / 6;          // up to 10 for something long unused
+    s += jitter(r.id, day, slot);          // small nudge so ties vary by day
+    return s;
   }
   return pool.sort(function(a, b){ return score(b) - score(a); });
 }
@@ -1117,6 +1133,7 @@ function choose(day, slot, idx){
 }
 function chooseSaved(day, slot, rid){
   var r = S.recipes.find(x => x.id === rid); if(!r) return;
+  r.lastUsed = Date.now();
   var cell = ensureCell(day, slot);
   removeMealItems(cell);
   cell.chosen = {title:r.title, why:"From your saved recipes", source:r.source||"Saved recipe", link:r.link||""};
@@ -1382,12 +1399,26 @@ async function callClaude(system, content, maxTokens, opts){
   }
   var data = await res.json();
   var raw = (data.content || []).map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
+  if(data.stop_reason === "max_tokens"){
+    var cut = new Error("The reply was cut short — asking for fewer recipes usually fixes it.");
+    cut.truncated = true;
+    throw cut;
+  }
   try{ return JSON.parse(raw); }
   catch(e){
     /* With search on, the model may wrap the JSON in prose. Take the outermost object. */
     var a = raw.indexOf("{"), b = raw.lastIndexOf("}");
-    if(a === -1 || b <= a) throw e;
-    return JSON.parse(raw.slice(a, b + 1));
+    if(a === -1 || b <= a){
+      var bad = new Error("Claude's reply wasn't in the expected format.");
+      bad.parseFail = true;
+      throw bad;
+    }
+    try{ return JSON.parse(raw.slice(a, b + 1)); }
+    catch(e2){
+      var bad2 = new Error("Claude's reply was incomplete.");
+      bad2.parseFail = true;
+      throw bad2;
+    }
   }
 }
 
@@ -1449,7 +1480,7 @@ async function loadSuggestions(day, slot){
         "LINKS: only put a URL in \"link\" if you have actually seen that page in web search results this turn. "
         + "Never construct, guess or recall a URL from memory. An empty link is perfectly fine — the recipe you "
         + "write is the substance.\n\n")
-    + "Return 3-5 suggestions as valid JSON only, no markdown fences:\n"
+    + "Return exactly 4 suggestions as valid JSON only, no markdown fences. Nothing before or after the JSON:\n"
     + '{"recipes":[{"title":"","source":"","link":"","why":"","suits_sw":false,"suits_lc":false,'
     + '"prepMins":15,"cookMins":30,"serves":4,'
     + '"buy":[{"name":"chicken breasts","qty":"4","unit":""}],'
@@ -1468,12 +1499,14 @@ async function loadSuggestions(day, slot){
       + (diets.length ? " Diets: " + diets.join(", ") : "");
     var parsed;
     try{
-      parsed = await callClaude(system, ask, 1600, {search: !OWN_LIST_SLOTS[slot]});
+      parsed = await callClaude(system, ask, 8000, {search: !OWN_LIST_SLOTS[slot]});
     }catch(e1){
-      /* Web search is an optional extra on the account. If it is not
-         available, the suggestions still work — just without links. */
       if(e1.message === "bad-key" || e1.message === "no-key") throw e1;
-      parsed = await callClaude(system, ask, 1600, {search:false});
+      /* Two things can go wrong here: web search may not be enabled on the
+         account, or the reply ran long. Retry plainer and shorter — one
+         retry that fixes either is better than a clean failure. */
+      parsed = await callClaude(system + "\n\nReturn exactly 3 suggestions, and keep each method to "
+        + "no more than 8 steps.", ask, 8000, {search:false});
       searchOff = true;
     }
     cell.suggestions = parsed.recipes || [];
@@ -1483,8 +1516,9 @@ async function loadSuggestions(day, slot){
     cell.loaded = false;
     toast(e.message === "bad-key" ? "That API key was rejected — check Settings"
         : e.message === "no-key" ? "Add your API key in Settings"
-        : e.status ? "Claude said: " + String(e.message).slice(0, 90)
-        : "Couldn't reach Claude — no network");
+        : (e.truncated || e.parseFail) ? String(e.message)
+        : e.status ? "Claude said: " + String(e.message).slice(0, 110)
+        : "No network — the request never left the phone");
   }
   if(searchOff) toast("Suggested without web search — links may be missing");
   save(); renderPlan();
