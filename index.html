@@ -330,6 +330,11 @@ body.dark .rmeta span{color:var(--ink);}
     <button class="btn wide" style="margin-top:13px" onclick="saveManualRecipe()">Save recipe</button>
   </div>
   <div class="sec-hd">Saved recipes</div>
+  <div class="card">
+    <div class="hint">Each recipe carries the meals it suits, so a pasta bake stops turning up at breakfast.
+      Existing ones are guessed from the recipe — Claude can go through them properly in one pass.</div>
+    <button class="btn wide ghost sm" id="tag-btn" style="margin-top:10px" onclick="tagAllRecipes()">Tag my recipes with Claude</button>
+  </div>
   <div id="recipe-groups"></div>
 </div>
 
@@ -518,7 +523,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.19";
+var VERSION = "2026.08.21";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -717,6 +722,21 @@ function conflictLabel(cf){
     return "Contains " + g.label.toLowerCase() + " — " + who + " dislike" + (n > 1 ? "" : "s") + " it";
   }).join(" · ");
 }
+/* Same ordering, but ignoring the meal-type tags — for when you know
+   exactly what you want and the filter is in the way. */
+function allRecipesForSlot(slot, day){
+  var own = OWN_LIST_SLOTS[slot];
+  if(own) return S.recipes.filter(function(r){ return r.category === own; });
+  var reserved = {};
+  Object.keys(OWN_LIST_SLOTS).forEach(function(k){ reserved[OWN_LIST_SLOTS[k]] = true; });
+  return S.recipes.filter(function(r){ return !reserved[r.category]; })
+    .filter(function(r){ return !recipeConflicts(r, day, slot).allergy.length; })
+    .sort(function(a, b){ return a.title.toLowerCase().localeCompare(b.title.toLowerCase()); });
+}
+function showEverything(day, slot){
+  showAllRecipes[day + "::" + slot] = true;
+  renderPlan();
+}
 function recipesForSlot(slot, day){
   var cell = ensureCell(day, slot);
   var own = OWN_LIST_SLOTS[slot];
@@ -725,7 +745,9 @@ function recipesForSlot(slot, day){
   Object.keys(OWN_LIST_SLOTS).forEach(function(k){ reserved[OWN_LIST_SLOTS[k]] = true; });
   var wanted = {};
   eatersFor(day, slot).forEach(function(m){ wanted[modeCategory(cell.modes[m.id] || m.mode)] = true; });
-  var pool = S.recipes.filter(function(r){ return !reserved[r.category]; });
+  var pool = S.recipes.filter(function(r){
+    return !reserved[r.category] && suitsSlot(r, slot);
+  });
   /* Never offer something an eater is allergic to. */
   pool = pool.filter(function(r){ return !recipeConflicts(r, day, slot).allergy.length; });
   /* Matching someone's plan floats up; a disliked ingredient sinks it.
@@ -793,6 +815,7 @@ function blankState(){
   };
 }
 var openSlots = new Set();
+var showAllRecipes = {};
 var currentMember = null;
 var shopView = "list";
 var scanPages = [], scanResult = null;
@@ -1092,11 +1115,13 @@ function slotBody(day, slot, cell, eating){
        + (totalSugMins(s) ? " · " + fmtMins(totalSugMins(s)) : "") + '</div></div>';
   });
 
-  var saved = recipesForSlot(slot, day)
+  var seeAll = !!showAllRecipes[day + "::" + slot];
+  var saved = (seeAll ? allRecipesForSlot(slot, day) : recipesForSlot(slot, day))
     .filter(r => !cell.suggestions.some(s => s.title === r.title));
   if(saved.length){
     h += '<div class="sec-hd" style="margin-top:14px">'
-       + (slot === "Treat" ? "Your treats" : slot === "Snack" ? "Your snacks" : "From your recipes") + '</div>';
+       + (slot === "Treat" ? "Your treats" : slot === "Snack" ? "Your snacks"
+          : seeAll ? "All your recipes" : "From your recipes") + '</div>';
     saved.slice(0,8).forEach(r => {
       var cf = recipeConflicts(r, day, slot);
       var warn = conflictLabel(cf);
@@ -1108,6 +1133,10 @@ function slotBody(day, slot, cell, eating){
                    + esc(warn) + '</div>' : "")
          + '</div>';
     });
+    if(!seeAll && !OWN_LIST_SLOTS[slot] && allRecipesForSlot(slot, day).length > saved.length){
+      h += '<button class="mini" onclick="event.stopPropagation();showEverything(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
+         + 'Show all ' + allRecipesForSlot(slot, day).length + ' of my recipes</button>';
+    }
   } else if(OWN_LIST_SLOTS[slot]){
     h += '<div class="hint" style="margin-top:14px">Nothing saved under <b>' + esc(OWN_LIST_SLOTS[slot])
        + '</b> yet — add items on the Recipes tab with that category and they will show up here. '
@@ -1142,7 +1171,11 @@ function chooseSaved(day, slot, rid){
   r.lastUsed = Date.now();
   var cell = ensureCell(day, slot);
   removeMealItems(cell);
-  cell.chosen = {title:r.title, why:"From your saved recipes", source:r.source||"Saved recipe", link:r.link||""};
+  cell.chosen = {title:r.title,
+                 why:r.notes ? String(r.notes).split("\n")[0] : "From your saved recipes",
+                 source:r.source || "Saved recipe", link:r.link || "",
+                 serves:r.serves, prepMins:r.prepMins, cookMins:r.cookMins,
+                 steps:(r.steps || []).slice(), recipeId:r.id};
   cell.addedIds = addIngredients(r.ingredients || [], r.title);
   save(); renderPlan();
   toast(cell.addedIds.length ? cell.addedIds.length + " items added to your list" : "Meal chosen");
@@ -2129,6 +2162,10 @@ function openRecipe(id){
     + '<div style="margin-top:10px" class="hint">' + recipeLinkHtml(r).replace(/^ · /, "") + '</div>' 
     + '</div>'
 
+    + ((planPick && planPick.rid === r.id)
+        ? planPickerHtml(r)
+        : '<button class="btn wide" style="margin-bottom:11px" onclick="openPlanPicker(\'' + r.id + '\')">Add to the plan</button>')
+    + '<div class="sec-hd">Good for</div><div class="card">' + slotChipsHtml(r) + '</div>'
     + '<div class="sec-hd">Ingredients</div><div class="card">'
     + ((r.ingredients || []).length
         ? (r.ingredients || []).map(function(g, i){ var l = ingLine(g);
@@ -2930,6 +2967,175 @@ function saveShopItem(id){
   editingShop = null;
   refreshFoodOptions(); save(); renderShop();
   toast("Saved — " + aisleName(aisle) + " from now on");
+}
+
+/* ═══ WHEN A RECIPE SUITS ══════════════════════════════════
+   Recipe categories describe the diet, not the time of day, so
+   a pasta bake could turn up at breakfast. Each recipe now
+   carries the meals it suits. Existing ones are guessed from
+   the title and ingredients so nothing needs tagging by hand,
+   and the guess can be overridden per recipe.
+   ═════════════════════════════════════════════════════════ */
+var TAGGABLE_SLOTS = ["Breakfast","Brunch","Lunch","Dinner","Tea","Supper"];
+
+var SLOT_CUES = {
+  Breakfast:/\b(granola|porridge|oat|muesli|cereal|pancake|waffle|crumpet|croissant|toast|bacon|sausage|scrambled|poached|fried egg|omelette|smoothie|kipper|full english|shakshuka|bagel|yoghurt|yogurt|overnight)\b/,
+  Brunch:/\b(brunch|pancake|waffle|benedict|shakshuka|avocado|smoked salmon|full english|frittata|omelette|hash|bagel)\b/,
+  Lunch:/\b(sandwich|soup|salad|wrap|baguette|panini|jacket potato|ploughman|quiche|frittata|omelette|toastie|pitta|houmou|hummu|pate|roll)\b/,
+  Dinner:/\b(roast|curry|casserole|stew|pie|lasagne|chop|steak|risotto|stir fry|stir-fry|bake|pasta|chilli|tagine|hotpot|shepherd|cottage pie|fajita|paella|goulash|schnitzel|wellington|bolognese|carbonara|biryani|noodle|chow mein|shashlik|kebab|gammon|brisket)\b/,
+  Tea:/\b(fish finger|bean on toast|nugget|pizza|burger|sausage|mash|jacket potato|pasta|omelette|toastie|wrap|fishcake)\b/,
+  Supper:/\b(soup|cheese on toast|bean on toast|toastie|welsh rarebit|scrambled|omelette|salad|leftover|crumpet|pate)\b/
+};
+/* Some things are unmistakably not breakfast, whatever words they share. */
+var HEAVY = /\b(roast|casserole|stew|lasagne|risotto|tagine|hotpot|shepherd|cottage pie|paella|goulash|wellington|brisket|chop|steak|curry)\b/;
+
+function recipeText(r){
+  return normalise([r.title || "",
+    (r.ingredients || []).map(function(g){ return typeof g === "object" ? g.name : g; }).join(" ")].join(" "));
+}
+function guessSlots(r){
+  var t = recipeText(r), hits = [];
+  TAGGABLE_SLOTS.forEach(function(s){ if(SLOT_CUES[s].test(t)) hits.push(s); });
+  if(HEAVY.test(t)){
+    hits = hits.filter(function(s){ return s !== "Breakfast" && s !== "Brunch" && s !== "Supper"; });
+    if(hits.indexOf("Dinner") === -1) hits.push("Dinner");
+  }
+  /* Nothing matched — assume a main meal rather than hiding it. */
+  if(!hits.length) hits = ["Dinner","Tea"];
+  return TAGGABLE_SLOTS.filter(function(s){ return hits.indexOf(s) !== -1; });
+}
+function recipeSlots(r){
+  return (r.slots && r.slots.length) ? r.slots : guessSlots(r);
+}
+function suitsSlot(r, slot){
+  if(OWN_LIST_SLOTS[slot]) return true;          // Snack and Treat filter on category
+  if(TAGGABLE_SLOTS.indexOf(slot) === -1) return true;
+  return recipeSlots(r).indexOf(slot) !== -1;
+}
+function toggleRecipeSlot(rid, slot){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  var cur = recipeSlots(r).slice();
+  var i = cur.indexOf(slot);
+  if(i === -1) cur.push(slot); else cur.splice(i, 1);
+  r.slots = TAGGABLE_SLOTS.filter(function(s){ return cur.indexOf(s) !== -1; });
+  r.slotsSet = true;
+  save(); openRecipe(rid);
+}
+function slotChipsHtml(r){
+  var cur = recipeSlots(r);
+  return '<div class="chips">' + TAGGABLE_SLOTS.map(function(s){
+    return '<div class="chip' + (cur.indexOf(s) !== -1 ? " on" : "") + '"'
+      + ' onclick="toggleRecipeSlot(\'' + r.id + '\',\'' + s + '\')">' + s + '</div>';
+  }).join("") + '</div>'
+  + '<div class="hint" style="margin-top:7px">'
+  + (r.slotsSet ? "Set by you." : "Guessed from the recipe — tap to correct.") + '</div>';
+}
+
+/* Optional: let Claude go through the untagged ones in one pass. */
+async function tagAllRecipes(){
+  if(!haveKey()){ toast("Add your Claude API key in Settings first"); goTab("settings"); return; }
+  var todo = S.recipes.filter(function(r){ return !r.slotsSet; });
+  if(!todo.length){ toast("Everything is already tagged"); return; }
+  var btn = document.getElementById("tag-btn");
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="pulse">Reading through them…</span>'; }
+  var list = todo.map(function(r, i){ return (i+1) + ". " + r.title; }).join("\n");
+  try{
+    var out = await callClaude(
+      "For each dish, say which meals it suits in a typical British household. "
+      + "Breakfast is cereal, eggs, toast and cooked breakfast items. Lunch is lighter — soups, sandwiches, "
+      + "salads. Dinner is the main evening meal. Tea is an earlier, lighter family evening meal. "
+      + "Supper is a small late plate. Brunch is a weekend late morning meal. "
+      + "Most main dishes suit Dinner and often Tea. Be strict: do not put heavy mains at Breakfast.\\n"
+      + 'Return valid JSON only: {"tags":[{"n":1,"slots":["Dinner","Tea"]}]} using these slot names only: '
+      + TAGGABLE_SLOTS.join(", ") + ".",
+      "Dishes:\n" + list, 4000, {search:false});
+    var n = 0;
+    (out.tags || []).forEach(function(t){
+      var r = todo[(t.n || 0) - 1];
+      if(!r || !t.slots) return;
+      var clean = TAGGABLE_SLOTS.filter(function(s){ return t.slots.indexOf(s) !== -1; });
+      if(!clean.length) return;
+      r.slots = clean; r.slotsSet = true; n++;
+    });
+    save(); renderRecipes();
+    toast(n ? n + " recipes tagged" : "Nothing came back to apply");
+  }catch(e){
+    toast(e.message === "bad-key" ? "That API key was rejected" : "Couldn't tag them — " + String(e.message).slice(0,70));
+  }
+  if(btn){ btn.disabled = false; btn.textContent = "Tag my recipes with Claude"; }
+}
+
+/* ═══ PLAN A RECIPE DIRECTLY ═══════════════════════════════
+   Until now a meal could only be chosen from inside its slot,
+   so a recipe you were looking at could not be put anywhere,
+   and anything the meal-type filter hid was unreachable. This
+   works the other way round: pick the recipe, then say when.
+   ═════════════════════════════════════════════════════════ */
+var planPick = null;      // {rid, offset, dayIdx, slot}
+
+function openPlanPicker(rid){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  var suits = recipeSlots(r);
+  planPick = {rid:rid, offset:S.weekOffset, dayIdx:S.dayIdx,
+              slot:(S.slots.filter(function(s){ return suits.indexOf(s) !== -1; })[0] || S.slots[0] || "Dinner")};
+  openRecipe(rid);
+}
+function closePlanPicker(){ var rid = planPick && planPick.rid; planPick = null; if(rid) openRecipe(rid); }
+function setPlanPart(key, val){
+  if(!planPick) return;
+  planPick[key] = (key === "slot") ? val : Number(val);
+  openRecipe(planPick.rid);
+}
+function planPickerHtml(r){
+  var saved = S.weekOffset, savedDay = S.dayIdx;
+  S.weekOffset = planPick.offset;
+  var days = orderedDays();
+  var dayHtml = days.map(function(d, i){
+    return '<div class="chip' + (i === planPick.dayIdx ? " on" : "") + '"'
+      + ' onclick="setPlanPart(\'dayIdx\',' + i + ')">'
+      + esc(d.slice(0,3)) + ' ' + esc(fmtDate(dayDate(i))) + '</div>';
+  }).join("");
+  S.weekOffset = saved; S.dayIdx = savedDay;
+
+  var suits = recipeSlots(r);
+  var slots = ALL_SLOTS.filter(function(s){
+    return S.slots.indexOf(s) !== -1 || S.members.some(function(m){ return slotsForMember(m.id).indexOf(s) !== -1; });
+  });
+  if(!slots.length) slots = S.slots.slice();
+  var slotHtml = slots.map(function(s){
+    var odd = TAGGABLE_SLOTS.indexOf(s) !== -1 && suits.indexOf(s) === -1;
+    return '<div class="chip' + (s === planPick.slot ? " on" : "") + '"'
+      + ' onclick="setPlanPart(\'slot\',\'' + esc(s) + '\')">' + esc(s) + (odd ? " ⚠" : "") + '</div>';
+  }).join("");
+
+  var mismatch = TAGGABLE_SLOTS.indexOf(planPick.slot) !== -1 && suits.indexOf(planPick.slot) === -1;
+
+  return '<div class="card" style="background:var(--accent-soft)">'
+    + '<div style="font-weight:600;margin-bottom:8px">Put this on the plan</div>'
+    + '<label class="fld">Week</label><div class="chips">'
+    + [[0,"This week"],[1,"Next week"],[2,"The week after"]].map(function(w){
+        return '<div class="chip' + (planPick.offset === w[0] ? " on" : "") + '"'
+          + ' onclick="setPlanPart(\'offset\',' + w[0] + ')">' + w[1] + '</div>'; }).join("")
+    + '</div>'
+    + '<label class="fld">Day</label><div class="chips">' + dayHtml + '</div>'
+    + '<label class="fld">Meal</label><div class="chips">' + slotHtml + '</div>'
+    + (mismatch ? '<div class="banner" style="margin-top:10px">This is not tagged as a '
+        + esc(planPick.slot.toLowerCase()) + ' recipe. You can still plan it — nothing is stopping you.</div>' : "")
+    + '<div class="row" style="margin-top:12px">'
+    + '<button class="btn ghost" onclick="closePlanPicker()">Cancel</button>'
+    + '<button class="btn" onclick="confirmPlanRecipe()">Add to plan</button></div></div>';
+}
+function confirmPlanRecipe(){
+  if(!planPick) return;
+  var p = planPick;
+  S.weekOffset = p.offset;
+  S.dayIdx = p.dayIdx;
+  var day = orderedDays()[p.dayIdx];
+  planPick = null;
+  chooseSaved(day, p.slot, p.rid);
+  openSlots.add(day + "::" + p.slot);
+  goTab("plan");
+  toast("Planned for " + day + " " + p.slot.toLowerCase());
 }
 
 </script>
