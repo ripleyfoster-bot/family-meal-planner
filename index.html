@@ -369,8 +369,9 @@ body.dark .rmeta span{color:var(--ink);}
   </div>
 
   <div id="shop-cupboard-view" hidden>
-    <div class="hint" style="margin-bottom:11px">Staples you normally keep in. When a meal needs one,
-      it arrives flagged so you can check the cupboard instead of buying another.</div>
+    <div class="hint" style="margin-bottom:11px">Staples you normally keep in. When a meal needs one it arrives
+      flagged, so you check the cupboard rather than buying another. Tap the status to mark something
+      <b>running low</b> or <b>out</b> and it goes straight on the list.</div>
     <div class="row tight" style="margin-bottom:11px">
       <input type="text" id="cup-manual" list="food-options" placeholder="e.g. tinned tomatoes" autocomplete="off"
              onkeydown="if(event.key==='Enter')addCupboard()">
@@ -523,7 +524,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.21";
+var VERSION = "2026.08.22";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1315,11 +1316,15 @@ function renderShop(){
     items.forEach(i => {
       var q = [i.qty, i.unit].filter(Boolean).join(" ");
       var meals = (i.meals || []).join(", ");
+      var pk = packsNeeded(i.name, parseAmount(q));
+      var packLine = pk ? "buy " + pk.count + " \u00d7 " + pk.pack
+                   : (packFor(i.name) ? "sold as " + packFor(i.name) : "");
       html += '<div class="shop-row ' + (i.status === "bought" ? "bought" : i.status === "have" ? "have" : "") + '">'
         + '<div class="chk' + (i.status === "bought" ? " done" : "") + '" onclick="cycleStatus(\'' + i.id + '\')">'
         + (i.status === "bought" ? "✓" : "") + '</div>'
         + '<div class="grow" onclick="toggleShopEditor(\'' + i.id + '\')" style="cursor:pointer">'
         + '<div class="nm">' + esc(i.name) + (q ? ' <span class="qty">' + esc(q) + '</span>' : "") + '</div>'
+        + (packLine ? '<div class="mt"><b>' + esc(packLine) + '</b></div>' : "")
         + (meals ? '<div class="mt">' + esc(meals) + '</div>' : "") + '</div>'
         + (i.status === "have"
             ? '<span class="cupboard-flag">In cupboard</span><button class="mini" onclick="setStatus(\'' + i.id + '\',\'need\')">Need it</button>'
@@ -1356,8 +1361,23 @@ function renderCupboard(){
     html += '<div class="aisle-hd">' + esc(a.name) + '</div>';
     items.forEach(c => {
       var open = editingCup === c.id;
-      html += '<div class="shop-row" onclick="toggleCupEditor(\'' + c.id + '\')" style="cursor:pointer">'
-        + '<div class="grow"><div class="nm">' + esc(c.name) + '</div></div>'
+      var st = c.stock || "in";
+      var d = demandFor(c.name);
+      var keep = parseAmount(c.keep);
+      var short = (d && d.amount && keep && d.amount.unit === keep.unit && d.amount.n > keep.n);
+      var bits = [];
+      if(c.keep) bits.push("keep " + c.keep);
+      if(d && d.amount) bits.push("week needs " + fmtAmount(d.amount));
+      else if(d) bits.push("used " + d.times + "\u00d7 this week");
+      html += '<div class="shop-row' + (st === "out" ? "" : st === "low" ? " have" : "") + '"'
+        + ' onclick="toggleCupEditor(\'' + c.id + '\')" style="cursor:pointer">'
+        + '<div class="grow"><div class="nm">' + esc(c.name) + '</div>'
+        + (bits.length ? '<div class="mt">' + esc(bits.join(" \u00b7 ")) + '</div>' : "")
+        + (short ? '<div class="cupboard-flag" style="margin-top:4px;display:inline-block">'
+                   + 'The plan needs more than you keep</div>' : "")
+        + '</div>'
+        + '<button class="mini' + (st === "in" ? " mut" : "") + '"'
+        + ' onclick="cycleStock(\'' + c.id + '\',event)">' + STOCK_LABEL[st] + '</button>'
         + '<span class="chev">' + (open ? "\u2304" : "\u203a") + '</span></div>'
         + (open ? cupEditorHtml(c) : "");
     });
@@ -2909,6 +2929,16 @@ function cupEditorHtml(c){
   return '<div class="card" style="margin:6px 13px 10px;background:var(--accent-soft)">'
     + '<label class="fld">Item</label>'
     + '<input type="text" id="cup-name" list="food-options" value="' + esc(c.name) + '">'
+    + '<label class="fld">How much you normally keep in</label>'
+    + '<input type="text" id="cup-keep" value="' + esc(c.keep || "") + '" placeholder="1kg, 2 pots, 6">'
+    + '<label class="fld">How it is sold <span style="font-weight:400;opacity:.6">optional</span></label>'
+    + '<input type="text" id="cup-pack" value="' + esc(packFor(c.name)) + '" placeholder="500g pot, hand of 5">'
+    + '<label class="fld">Stock right now</label>'
+    + '<div class="chips" id="cup-stock">'
+    + STOCK.map(function(s){
+        return '<div class="chip' + ((c.stock || "in") === s ? " on" : "") + '" data-s="' + s + '"'
+          + ' onclick="soloChip(this,\'cup-stock\')">' + STOCK_LABEL[s] + '</div>'; }).join("")
+    + '</div>'
     + '<label class="fld">Aisle</label>'
     + '<select id="cup-aisle">'
     + storeAisles().map(function(a){
@@ -2927,7 +2957,12 @@ function saveCupboardItem(id){
   if(!name){ toast("Give it a name, or remove it"); return; }
   var aisle = document.getElementById("cup-aisle").value;
   c.name = name; c.aisle = aisle;
+  c.keep = document.getElementById("cup-keep").value.trim();
+  var chosenStock = document.querySelector("#cup-stock .chip.on");
+  c.stock = chosenStock ? chosenStock.getAttribute("data-s") : (c.stock || "in");
+  setPack(name, document.getElementById("cup-pack").value);
   learnAisle(name, aisle);
+  syncRestock(c);
   editingCup = null;
   refreshFoodOptions(); save(); renderCupboard();
   toast("Saved — " + aisleName(aisle) + " from now on");
@@ -2945,6 +2980,8 @@ function shopEditorHtml(i){
     + '<input type="text" id="shp-qty" value="' + esc([i.qty, i.unit].filter(Boolean).join(" "))
     + '" placeholder="2" style="max-width:34%">'
     + '<input type="text" id="shp-name" list="food-options" value="' + esc(i.name) + '"></div>'
+    + '<label class="fld">How it is sold <span style="font-weight:400;opacity:.6">optional</span></label>'
+    + '<input type="text" id="shp-pack" value="' + esc(packFor(i.name)) + '" placeholder="500g pot, hand of 5">'
     + '<label class="fld">Aisle</label>'
     + '<select id="shp-aisle">'
     + storeAisles().map(function(a){
@@ -2963,6 +3000,7 @@ function saveShopItem(id){
   var aisle = document.getElementById("shp-aisle").value;
   var p = parseIngredient((document.getElementById("shp-qty").value.trim() + " " + name).trim());
   i.name = p.name || name; i.qty = p.qty; i.unit = p.unit; i.aisle = aisle;
+  setPack(i.name, document.getElementById("shp-pack").value);
   learnAisle(i.name, aisle);
   editingShop = null;
   refreshFoodOptions(); save(); renderShop();
@@ -3136,6 +3174,137 @@ function confirmPlanRecipe(){
   openSlots.add(day + "::" + p.slot);
   goTab("plan");
   toast("Planned for " + day + " " + p.slot.toLowerCase());
+}
+
+/* ═══ AMOUNTS, STOCK LEVELS AND PACK SIZES ═════════════════
+   Three separate problems that look like one:
+     - a cupboard staple has no idea how much you keep
+     - the plan knows how much it needs but never says
+     - "2 bananas" is a recipe amount, not a purchase
+   No automatic depletion here. Tracking every spoonful fails
+   the first time somebody eats something without telling the
+   app, so stock level is something you set, in one tap.
+   ═════════════════════════════════════════════════════════ */
+var UNIT_ALIASES = {
+  g:"g", gram:"g", grams:"g", gs:"g",
+  kg:"kg", kilo:"kg", kilos:"kg", kilogram:"kg",
+  ml:"ml", millilitre:"ml", millilitres:"ml",
+  l:"l", litre:"l", litres:"l", liter:"l",
+  tsp:"tsp", tbsp:"tbsp", oz:"oz", lb:"lb"
+};
+var TO_BASE = {g:[1,"g"], kg:[1000,"g"], ml:[1,"ml"], l:[1000,"ml"],
+               oz:[28.35,"g"], lb:[453.6,"g"], tsp:[5,"ml"], tbsp:[15,"ml"]};
+
+/* "500g" -> 500 grams; "1.5 kg" -> 1500 grams; "3" -> 3 of a countable thing. */
+function parseAmount(text){
+  if(text === null || text === undefined) return null;
+  var s = String(text).trim().toLowerCase();
+  if(!s) return null;
+  /* Shops describe packs in words as often as numbers — "hand of 5",
+     "pack of 6", "dozen". Catch those before giving up. */
+  var m = s.match(/^([\d]+(?:[.,][\d]+)?)\s*([a-z]+)?/);
+  if(!m){
+    var of = s.match(/\bof\s+([\d]+)/);
+    if(of) return {n:parseFloat(of[1]), unit:"each"};
+    if(/\bdozen\b/.test(s)) return {n:12, unit:"each"};
+    if(/\b(pair|brace)\b/.test(s)) return {n:2, unit:"each"};
+    return null;
+  }
+  var n = parseFloat(m[1].replace(",", "."));
+  if(isNaN(n)) return null;
+  var u = UNIT_ALIASES[(m[2] || "").trim()] || (m[2] || "").trim();
+  if(TO_BASE[u]) return {n:n * TO_BASE[u][0], unit:TO_BASE[u][1]};
+  return {n:n, unit:u || "each"};
+}
+function fmtAmount(a){
+  if(!a) return "";
+  if(a.unit === "g")  return a.n >= 1000 ? +(a.n/1000).toFixed(2) + "kg" : Math.round(a.n) + "g";
+  if(a.unit === "ml") return a.n >= 1000 ? +(a.n/1000).toFixed(2) + "l"  : Math.round(a.n) + "ml";
+  var n = Math.round(a.n * 100) / 100;
+  if(a.unit === "each") return String(n);
+  var u = a.unit;
+  if(n !== 1 && !/s$/.test(u)) u += "s";     // "2 pots", not "2 potss"
+  if(n === 1) u = u.replace(/s$/, "");
+  return n + " " + u;
+}
+function addAmounts(a, b){
+  if(!a) return b;
+  if(!b) return a;
+  if(a.unit !== b.unit) return a;          // can't add grams to bananas
+  return {n:a.n + b.n, unit:a.unit};
+}
+
+/* What the planned week actually calls for, per food. */
+function weeklyDemand(){
+  var need = {};
+  orderedDays().forEach(function(day){
+    var cells = S.plan[day]; if(!cells) return;
+    Object.keys(cells).forEach(function(slot){
+      var c = cells[slot]; if(!c || !c.chosen) return;
+      var list = [];
+      var r = c.chosen.recipeId && S.recipes.find(function(x){ return x.id === c.chosen.recipeId; });
+      if(r) list = r.ingredients || [];
+      else list = (c.chosen.buy || []).concat(c.chosen.pantry || []);
+      list.forEach(function(g){
+        var p = (typeof g === "object") ? g : parseIngredient(g);
+        var key = normalise(p.name); if(!key) return;
+        var amt = parseAmount([p.qty, p.unit].filter(Boolean).join(" "));
+        if(!need[key]) need[key] = {name:p.name, amount:null, times:0};
+        need[key].amount = addAmounts(need[key].amount, amt);
+        need[key].times++;
+      });
+    });
+  });
+  return need;
+}
+function demandFor(name){
+  var d = weeklyDemand()[normalise(name)];
+  return d || null;
+}
+
+/* Recipes are written in cooking amounts; shops sell packs. */
+function packFor(name){
+  var f = S.foods[normalise(name)];
+  return (f && f.pack) ? f.pack : "";
+}
+function setPack(name, packText){
+  var key = learnFood(name, {});
+  if(!key) return;
+  S.foods[key].pack = String(packText || "").trim();
+}
+/* "700g needed, sold in 500g pots" -> 2 pots. */
+function packsNeeded(name, amount){
+  var pack = parseAmount(packFor(name));
+  if(!pack || !amount || pack.unit !== amount.unit || !pack.n) return null;
+  return {count:Math.ceil(amount.n / pack.n), pack:packFor(name)};
+}
+
+var STOCK = ["in", "low", "out"];
+var STOCK_LABEL = {in:"In", low:"Running low", out:"Out"};
+function cycleStock(id, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  var c = S.cupboard.find(function(x){ return x.id === id; }); if(!c) return;
+  var i = STOCK.indexOf(c.stock || "in");
+  c.stock = STOCK[(i + 1) % STOCK.length];
+  syncRestock(c);
+  save(); renderCupboard();
+}
+/* Anything low or out belongs on the list; anything back in comes off it. */
+function syncRestock(c){
+  var key = normalise(c.name);
+  var existing = S.shop.filter(function(i){ return i.restock && normalise(i.name) === key; })[0];
+  if(c.stock === "low" || c.stock === "out"){
+    if(existing) return;
+    var d = demandFor(c.name);
+    var amt = d && d.amount ? fmtAmount(d.amount) : (c.keep || "");
+    var p = parseIngredient((amt ? amt + " " : "") + c.name);
+    S.shop.push({id:uid(), name:c.name, qty:p.qty, unit:p.unit,
+      aisle:resolveAisle(c.aisle), status:"need", fromCupboard:false,
+      meals:[c.stock === "out" ? "cupboard — out" : "cupboard — low"],
+      manual:false, restock:true, extra:[], price:null, priceGuess:false});
+  } else if(existing){
+    S.shop = S.shop.filter(function(i){ return i !== existing; });
+  }
 }
 
 </script>
