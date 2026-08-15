@@ -524,7 +524,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.23";
+var VERSION = "2026.08.24";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1031,12 +1031,12 @@ function renderPlan(){
     var cell = ensureCell(day, slot);
     var key = day + "::" + slot, open = openSlots.has(key);
     var eating = eatersFor(day, slot);
-    var live = liveChosen(cell);
-    var sub = live ? live.title
+    var mt = mealTitle(cell);
+    var sub = mt ? mt
             : eating.length ? eating.length + (eating.length===1?" eating":" eating") : "nobody eating";
     html += '<div class="slot"><div class="slot-hd" onclick="toggleSlot(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
           + '<div class="ttl"><b>' + esc(slot) + '</b><div>' + esc(sub) + '</div></div>'
-          + (cell.chosen ? '<span class="badge b-std">Chosen</span>' : "")
+          + (hasMeal(cell) ? '<span class="badge b-std">' + liveItems(cell).length + '</span>' : "")
           + '<span class="chev">' + (open ? "⌄" : "›") + '</span></div>';
     if(open) html += '<div class="slot-body">' + slotBody(day, slot, cell, eating) + '</div>';
     html += "</div>";
@@ -1072,35 +1072,80 @@ function slotBody(day, slot, cell, eating){
     return h + '<div class="hint" style="margin-top:11px">Nobody eating this meal.</div>';
   }
 
-  if(cell.chosen){
-    var c = liveChosen(cell);
-    var cMeta = [];
-    if(c.serves) cMeta.push("serves " + c.serves);
-    if(c.prepMins) cMeta.push(fmtMins(c.prepMins) + " prep");
-    if(c.cookMins) cMeta.push(fmtMins(c.cookMins) + " cook");
-    h += '<div class="sug picked" style="margin-top:11px"><div class="st">' + esc(c.title) + '</div>'
-       + (c.why ? '<div class="sy">' + esc(c.why) + '</div>' : "")
-       + (cMeta.length ? '<div class="rmeta">' + cMeta.map(function(m){ return '<span>' + esc(m) + '</span>'; }).join("") + '</div>' : "")
-       + (c.looks ? '<div class="sy" style="margin-top:8px"><b>On the plate:</b> ' + esc(c.looks) + '</div>' : "")
-       + ((c.steps && c.steps.length)
-            ? '<div class="sec-hd" style="margin-top:12px;margin-bottom:4px">Method</div>'
-              + c.steps.map(function(s, i){
-                  return '<div class="step"><div class="no">' + (i+1) + '</div><div class="tx">' + esc(s) + '</div></div>';
-                }).join("")
-            : "")
-       + '<div class="ss">' + esc(c.source || "") + recipeLinkHtml(c) + '</div>'
+  var items = liveItems(cell);
+  var picking = addingCourse[day + "::" + slot];
+
+  /* Whatever is already on the plate, in course order. */
+  items.forEach(function(it){
+    h += '<div class="sug picked" style="margin-top:11px">'
+       + '<div class="ss" style="margin:0 0 3px">' + esc(it.course) + '</div>'
+       + '<div class="st">' + esc(it.title) + '</div>'
+       + (it.why ? '<div class="sy">' + esc(it.why) + '</div>' : "");
+    var meta = [];
+    if(it.serves) meta.push("serves " + it.serves);
+    if(it.prepMins) meta.push(fmtMins(it.prepMins) + " prep");
+    if(it.cookMins) meta.push(fmtMins(it.cookMins) + " cook");
+    if(meta.length) h += '<div class="rmeta">' + meta.map(function(m){ return '<span>' + esc(m) + '</span>'; }).join("") + '</div>';
+    if(it.looks) h += '<div class="sy" style="margin-top:8px"><b>On the plate:</b> ' + esc(it.looks) + '</div>';
+    if(it.steps && it.steps.length){
+      h += '<div class="sec-hd" style="margin-top:12px;margin-bottom:4px">Method</div>'
+         + it.steps.map(function(s, i){
+             return '<div class="step"><div class="no">' + (i+1) + '</div><div class="tx">' + esc(s) + '</div></div>';
+           }).join("");
+    }
+    h += '<div class="ss">' + esc(it.source || "") + recipeLinkHtml(it) + '</div>'
        + '<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">'
-       + '<button class="mini" onclick="event.stopPropagation();unchoose(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Change meal</button>'
-       + (S.standards[stdKey(slot,c.title)]
-            ? '<button class="mini mut" onclick="event.stopPropagation();unmarkStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\')">★ Regular — remove</button>'
-            : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(c.title) + '\',\'' + esc(day) + '\')">☆ Make this a regular</button>')
-       + (savedRecipeFor(c.title)
-            ? '<button class="mini" onclick="event.stopPropagation();openSavedRecipe(\'' + esc(c.title) + '\')">View recipe</button>'
-            : '<button class="mini" onclick="event.stopPropagation();keepAsRecipe(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Save to recipes</button>')
+       + '<button class="mini" onclick="event.stopPropagation();removeFromMeal(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + it.itemId + '\')">Remove</button>'
+       + (it.recipeId
+            ? '<button class="mini" onclick="event.stopPropagation();openSavedRecipe(\'' + esc(it.title).replace(/'/g, "\\'") + '\')">View recipe</button>'
+            : '<button class="mini" onclick="event.stopPropagation();keepAsRecipe(\'' + esc(day) + '\',\'' + esc(slot) + '\',false,\'' + it.itemId + '\')">Save to recipes</button>')
+       + (S.standards[stdKey(slot, it.title)]
+            ? '<button class="mini mut" onclick="event.stopPropagation();unmarkStd(\'' + esc(slot) + '\',\'' + esc(it.title) + '\')">★ Regular</button>'
+            : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(it.title) + '\',\'' + esc(day) + '\')">☆ Make regular</button>')
        + '</div></div>';
+  });
+
+  /* Add another course, or a first one. */
+  if(picking){
+    h += '<div class="card" style="margin-top:11px;background:var(--accent-soft)">'
+       + '<div style="font-weight:600;margin-bottom:6px">Add a ' + esc(picking.toLowerCase()) + '</div>'
+       + '<div class="chips" style="margin-bottom:9px">'
+       + COURSES.map(function(cs){
+           return '<div class="chip' + (cs === picking ? " on" : "") + '"'
+             + ' onclick="openCoursePicker(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + cs + '\')">' + cs + '</div>';
+         }).join("")
+       + '</div>';
+    var pool = recipesForCourse(picking, slot, day)
+      .filter(function(r){ return !cellItems(cell).some(function(i){ return i.recipeId === r.id; }); });
+    if(pool.length){
+      pool.slice(0, 12).forEach(function(r){
+        var cf = recipeConflicts(r, day, slot);
+        var warn = conflictLabel(cf);
+        h += '<div class="sug" style="background:var(--card)" onclick="event.stopPropagation();addToMeal(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + r.id + '\',\'' + esc(picking) + '\')">'
+           + '<div class="st">' + esc(r.title) + '</div>'
+           + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves)
+           + (totalMins(r) ? ' · ' + fmtMins(totalMins(r)) : "") + '</div>'
+           + (warn ? '<div class="cupboard-flag" style="margin-top:6px;display:inline-block;white-space:normal">' + esc(warn) + '</div>' : "")
+           + '</div>';
+      });
+    } else {
+      h += '<div class="hint">Nothing saved as a ' + esc(picking.toLowerCase())
+         + ' yet. Set the course on a recipe and it will appear here.</div>';
+    }
+    h += '<button class="btn wide ghost sm" style="margin-top:11px" onclick="event.stopPropagation();closeCoursePicker(\'' + esc(day) + '\',\'' + esc(slot) + '\')">Done</button></div>';
     return h;
   }
 
+  if(items.length){
+    h += '<div class="chips" style="margin-top:11px">'
+       + COURSES.map(function(cs){
+           return '<div class="chip" onclick="event.stopPropagation();openCoursePicker(\'' + esc(day) + '\',\'' + esc(slot) + '\',\'' + cs + '\')">+ ' + cs + '</div>';
+         }).join("")
+       + '</div>';
+    return h;
+  }
+
+  /* Nothing chosen yet — the original suggestion flow. */
   if(!cell.loaded){
     h += '<button class="btn wide sm" style="margin-top:12px" id="load-' + esc(day+slot).replace(/\W/g,"") + '"'
        + ' onclick="event.stopPropagation();loadSuggestions(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
@@ -1119,7 +1164,7 @@ function slotBody(day, slot, cell, eating){
 
   var seeAll = !!showAllRecipes[day + "::" + slot];
   var saved = (seeAll ? allRecipesForSlot(slot, day) : recipesForSlot(slot, day))
-    .filter(r => !cell.suggestions.some(s => s.title === r.title));
+    .filter(r => !(cell.suggestions || []).some(s => s.title === r.title));
   if(saved.length){
     h += '<div class="sec-hd" style="margin-top:14px">'
        + (slot === "Treat" ? "Your treats" : slot === "Snack" ? "Your snacks"
@@ -1131,8 +1176,7 @@ function slotBody(day, slot, cell, eating){
          + '<div class="st">' + esc(r.title) + '</div>'
          + '<div class="ss">' + esc(r.category) + ' · serves ' + esc(r.serves)
          + (totalMins(r) ? ' · ' + fmtMins(totalMins(r)) : "") + '</div>'
-         + (warn ? '<div class="cupboard-flag" style="margin-top:6px;display:inline-block;white-space:normal">'
-                   + esc(warn) + '</div>' : "")
+         + (warn ? '<div class="cupboard-flag" style="margin-top:6px;display:inline-block;white-space:normal">' + esc(warn) + '</div>' : "")
          + '</div>';
     });
     if(!seeAll && !OWN_LIST_SLOTS[slot] && allRecipesForSlot(slot, day).length > saved.length){
@@ -1146,6 +1190,7 @@ function slotBody(day, slot, cell, eating){
   }
   return h;
 }
+
 function setMode(day, slot, mid, val){
   ensureCell(day, slot).modes[mid] = val;
   save(); renderPlan();
@@ -1162,30 +1207,21 @@ function unmarkStd(slot, title){ delete S.standards[stdKey(slot,title)]; save();
 function choose(day, slot, idx){
   var cell = ensureCell(day, slot);
   var s = cell.suggestions[idx]; if(!s) return;
-  removeMealItems(cell);
-  cell.chosen = s;
-  cell.addedIds = addIngredients(s.buy || [], s.title);
+  cellItems(cell).push(Object.assign({}, s, {itemId:uid(), course:"Main"}));
+  rebuildShopFromPlan();
   save(); renderPlan();
-  toast(cell.addedIds.length ? cell.addedIds.length + " items added to your list" : "Meal chosen");
+  toast("Meal chosen");
 }
 function chooseSaved(day, slot, rid){
   var r = S.recipes.find(x => x.id === rid); if(!r) return;
   r.lastUsed = Date.now();
-  var cell = ensureCell(day, slot);
-  removeMealItems(cell);
-  cell.chosen = {title:r.title,
-                 why:r.notes ? String(r.notes).split("\n")[0] : "From your saved recipes",
-                 source:r.source || "Saved recipe", link:r.link || "",
-                 serves:r.serves, prepMins:r.prepMins, cookMins:r.cookMins,
-                 steps:(r.steps || []).slice(), recipeId:r.id};
-  cell.addedIds = addIngredients(r.ingredients || [], r.title);
-  save(); renderPlan();
-  toast(cell.addedIds.length ? cell.addedIds.length + " items added to your list" : "Meal chosen");
+  addToMeal(day, slot, rid, courseOf(r));
+  return;
 }
 function unchoose(day, slot){
   var cell = ensureCell(day, slot);
-  removeMealItems(cell);
-  cell.chosen = null; cell.loaded = false; cell.suggestions = [];
+  cell.items = []; cell.loaded = false; cell.suggestions = [];
+  rebuildShopFromPlan();
   save(); renderPlan();
 }
 </script>
@@ -1200,12 +1236,15 @@ function unchoose(day, slot){
 
 function parseIngredient(raw){
   if(raw && typeof raw === "object"){
-    return {name:String(raw.name||"").trim(), qty:raw.qty||"", unit:raw.unit||""};
+    var sp0 = splitPrep(String(raw.name || ""));
+    return {name:(sp0.base || String(raw.name || "").trim()), qty:raw.qty || "", unit:raw.unit || "",
+            prep:(raw.prep !== undefined ? raw.prep : sp0.prep) || ""};
   }
   var s = String(raw).trim();
   var m = s.match(/^([\d]+(?:[.,\/][\d]+)?)\s*(kg|g|ml|l|tbsp|tsp|cloves?|tins?|cans?|packs?|slices?|bunch(?:es)?|handfuls?|x)?\s+(.*)$/i);
-  if(m) return {name:m[3].trim(), qty:m[1], unit:(m[2]||"").trim()};
-  return {name:s, qty:"", unit:""};
+  var rest = m ? m[3].trim() : s;
+  var sp = splitPrep(rest);
+  return {name:sp.base || rest, qty:m ? m[1] : "", unit:m ? (m[2] || "").trim() : "", prep:sp.prep};
 }
 function inCupboard(name){
   var n = normalise(name);
@@ -1551,7 +1590,7 @@ async function loadSuggestions(day, slot){
   var planned = [];
   orderedDays().forEach(d => {
     if(S.plan[d]) Object.values(S.plan[d]).forEach(function(c){
-      var lc = liveChosen(c); if(lc) planned.push(lc.title);
+      liveItems(c).forEach(function(lv){ planned.push(lv.title); });
     });
   });
   var stds = Object.keys(S.standards).filter(k => k.split("||")[0] === slot).map(k => k.split("||").slice(1).join("||"));
@@ -2203,15 +2242,22 @@ function openRecipe(id){
     + ((planPick && planPick.rid === r.id)
         ? planPickerHtml(r)
         : '<button class="btn wide" style="margin-bottom:11px" onclick="openPlanPicker(\'' + r.id + '\')">Add to the plan</button>')
+    + '<div class="sec-hd">Course</div><div class="card"><div class="chips">'
+    + COURSES.map(function(cs){
+        return '<div class="chip' + (courseOf(r) === cs ? " on" : "") + '"'
+          + ' onclick="setCourse(\'' + r.id + '\',\'' + cs + '\')">' + cs + '</div>'; }).join("")
+    + '</div><div class="hint" style="margin-top:7px">'
+    + (r.course ? "Set by you." : "Guessed from the recipe — tap to correct.")
+    + ' Sides, starters and desserts can be added alongside a main.</div></div>'
     + '<div class="sec-hd">Good for</div><div class="card">' + slotChipsHtml(r) + '</div>'
     + '<div class="sec-hd">Ingredients</div><div class="card">'
     + ((r.ingredients || []).length
-        ? (r.ingredients || []).map(function(g, i){ var l = ingLine(g);
+        ? (r.ingredients || []).map(function(g, i){ var l = ingDisplay(g);
             var open = editingIng && editingIng.rid === r.id && editingIng.idx === i;
             var sw = swapsFor(l.n);
             return '<div class="ing" onclick="toggleIngEditor(\'' + r.id + '\',' + i + ')" style="cursor:pointer">'
               + '<span class="q">' + esc(l.q || "\u2014") + '</span>'
-              + '<span class="grow">' + esc(l.n) + '</span>'
+              + '<span class="grow">' + esc(l.full) + '</span>'
               + (sw.length ? '<span class="mini mut" style="padding:0">swap</span>' : "")
               + '<span class="chev">' + (open ? "\u2304" : "\u203a") + '</span></div>'
               + (open ? ingEditorHtml(r, i) : ""); }).join("")
@@ -2265,7 +2311,7 @@ function editRecipe(id){
     + '<input type="number" id="er-cook" min="0" value="' + (r.cookMins || "") + '"></div></div>'
     + '<label class="fld">Ingredients — one per line</label>'
     + '<textarea id="er-ings" rows="6">'
-    + esc((r.ingredients || []).map(function(g){ var l = ingLine(g); return (l.q ? l.q + " " : "") + l.n; }).join("\n"))
+    + esc((r.ingredients || []).map(function(g){ var l = ingDisplay(g); return (l.q ? l.q + " " : "") + l.full; }).join("\n"))
     + '</textarea>'
     + '<label class="fld">Method — one step per line</label>'
     + '<textarea id="er-steps" rows="7">' + esc((r.steps || []).join("\n")) + '</textarea>'
@@ -2542,9 +2588,11 @@ function categoryForSlot(slot, day){
   if(modes.length && modes.every(function(m){ return m === "Low carb / HP"; })) return "Low carb / HP";
   return "General eating";
 }
-function keepAsRecipe(day, slot, quiet){
+function keepAsRecipe(day, slot, quiet, itemId){
   var cell = ensureCell(day, slot);
-  var c = cell.chosen;
+  var items = cellItems(cell);
+  var it = itemId ? items.filter(function(x){ return x.itemId === itemId; })[0] : items[0];
+  var c = it && liveItem(it);
   if(!c){ toast("Nothing chosen for this meal"); return null; }
   var existing = savedRecipeFor(c.title);
   if(existing){ if(!quiet) toast("Already in your recipes"); return existing; }
@@ -2569,6 +2617,7 @@ function keepAsRecipe(day, slot, quiet){
     source:c.source || "Claude", link:trustedLink(c.link) || ""
   };
   S.recipes.push(r);
+  if(it){ it.recipeId = r.id; }
   refreshFoodOptions(); save();
   if(!quiet) toast("Saved to Recipes — add the method when you make it");
   return r;
@@ -2874,13 +2923,15 @@ function toggleIngEditor(rid, idx){
   openRecipe(rid);
 }
 function ingEditorHtml(r, idx){
-  var g = ingLine(r.ingredients[idx]);
+  var g = ingDisplay(r.ingredients[idx]);
   var opts = swapsFor(g.n);
   return '<div class="card" style="margin:6px 0 10px;background:var(--accent-soft)">'
     + '<label class="fld">Amount and ingredient</label>'
     + '<div class="row tight">'
     + '<input type="text" id="ing-qty" value="' + esc(g.q) + '" placeholder="200g" style="max-width:34%">'
     + '<input type="text" id="ing-name" list="food-options" value="' + esc(g.n) + '"></div>'
+    + '<label class="fld">Preparation <span style="font-weight:400;opacity:.6">kept off the shopping list</span></label>'
+    + '<input type="text" id="ing-prep" value="' + esc(g.prep || "") + '" placeholder="thinly sliced">'
     + (opts.length
         ? '<label class="fld">Swap it for</label><div class="chips">'
           + opts.map(function(o){
@@ -2900,6 +2951,8 @@ function saveIngredient(rid, idx){
   if(!name){ toast("Give it a name, or remove it"); return; }
   var qty = document.getElementById("ing-qty").value.trim();
   var parsed = parseIngredient((qty ? qty + " " : "") + name);
+  var prepEl = document.getElementById("ing-prep");
+  if(prepEl) parsed.prep = prepEl.value.trim();
   r.ingredients[idx] = parsed;
   learnFood(parsed.name, {use:"recipe"});
   editingIng = null;
@@ -3272,11 +3325,11 @@ function weeklyDemand(){
   orderedDays().forEach(function(day){
     var cells = S.plan[day]; if(!cells) return;
     Object.keys(cells).forEach(function(slot){
-      var c = cells[slot]; if(!c || !c.chosen) return;
+      var c = cells[slot]; if(!c) return;
       var list = [];
-      var r = c.chosen.recipeId && S.recipes.find(function(x){ return x.id === c.chosen.recipeId; });
-      if(r) list = r.ingredients || [];
-      else list = (c.chosen.buy || []).concat(c.chosen.pantry || []);
+      liveItems(c).forEach(function(lv){
+        list = list.concat(lv.buy || [], lv.pantry || []);
+      });
       list.forEach(function(g){
         var p = (typeof g === "object") ? g : parseIngredient(g);
         var key = normalise(p.name); if(!key) return;
@@ -3380,9 +3433,11 @@ function rebuildShopFromPlan(){
     var cells = S.plan[day];
     Object.keys(cells).forEach(function(slot){
       var cell = cells[slot];
-      var lc = liveChosen(cell);
-      if(!lc){ cell.addedIds = []; return; }
-      cell.addedIds = addIngredients((lc.buy || []).concat(lc.pantry || []), lc.title);
+      cellItems(cell).forEach(function(it){
+        var lv = liveItem(it);
+        if(!lv){ it.addedIds = []; return; }
+        it.addedIds = addIngredients((lv.buy || []).concat(lv.pantry || []), lv.title);
+      });
     });
   });
 
@@ -3399,11 +3454,182 @@ function resyncPlanned(recipeId){
   Object.keys(S.plan).forEach(function(day){
     var cells = S.plan[day];
     Object.keys(cells).forEach(function(slot){
-      if(cells[slot].chosen && cells[slot].chosen.recipeId === recipeId) n++;
+      if(cellItems(cells[slot]).some(function(it){ return it.recipeId === recipeId; })) n++;
     });
   });
   if(n) rebuildShopFromPlan();
   return n;
+}
+
+/* ═══ INGREDIENT NAMES VS PREPARATION ══════════════════════
+   "Jacket potato", "thinly sliced potato" and "potato, thinly
+   sliced" are one thing to buy and three ways of writing it.
+   Matching on the whole phrase was never going to group them,
+   so the preparation is now split off the name: the base food
+   drives grouping, the preparation stays for the cook.
+   ═════════════════════════════════════════════════════════ */
+var PREP_WORDS = [
+  "thinly","thickly","finely","roughly","coarsely","evenly","lightly",
+  "chopped","diced","sliced","cubed","shredded","torn","halved","quartered",
+  "peeled","deseeded","seeded","trimmed","washed","drained","rinsed","grated",
+  "crushed","minced","mashed","juiced","zested","segmented","shaved","cut",
+  "jacket","roast","roasted","boiled","baked","fried","steamed","grilled",
+  "cooked","raw","leftover","ready","softened","melted","beaten","whisked",
+  "julienned","room","temperature","optional","approx","about"
+];
+var PREP_TAIL = /\b(cut into .*|into .*|for (serving|garnish|dusting|greasing|frying).*|to (serve|taste|garnish).*)$/;
+
+/* Returns the plain food and the preparation, in whatever order they were written. */
+function splitPrep(text){
+  var s = String(text || "").trim();
+  if(!s) return {base:"", prep:""};
+
+  var prepBits = [];
+  /* Anything after a comma is nearly always preparation. */
+  var comma = s.split(",");
+  var head = comma.shift();
+  if(comma.length) prepBits.push(comma.join(",").trim());
+
+  /* And a trailing "cut into wedges" / "to serve". */
+  var tail = head.match(PREP_TAIL);
+  if(tail){ prepBits.push(tail[0].trim()); head = head.slice(0, tail.index).trim(); }
+
+  /* Then strip prep words wherever they sit in what is left. */
+  var kept = [], dropped = [];
+  head.split(/\s+/).forEach(function(w){
+    var bare = w.toLowerCase().replace(/[^a-z-]/g, "");
+    if(bare && PREP_WORDS.indexOf(bare) !== -1) dropped.push(w); else kept.push(w);
+  });
+  if(dropped.length) prepBits.unshift(dropped.join(" "));
+
+  var base = kept.join(" ").replace(/\s+/g, " ").trim();
+  if(!base){ base = head.trim(); prepBits = comma.length ? [comma.join(",").trim()] : []; }
+  return {base:base, prep:prepBits.filter(Boolean).join(", ")};
+}
+/* How an ingredient reads on the page: "2 potatoes, thinly sliced". */
+function ingDisplay(g){
+  var l = ingLine(g);
+  var prep = (typeof g === "object" && g.prep) ? g.prep : "";
+  return {q:l.q, n:l.n, prep:prep, full:l.n + (prep ? ", " + prep : "")};
+}
+/* Re-split ingredients that were saved before this existed. */
+function tidyIngredients(){
+  var changed = 0;
+  S.recipes.forEach(function(r){
+    (r.ingredients || []).forEach(function(g){
+      if(typeof g !== "object" || g.prep !== undefined) return;
+      var sp = splitPrep(g.name);
+      if(sp.base && sp.base !== g.name){ g.name = sp.base; g.prep = sp.prep; changed++; }
+      else g.prep = "";
+    });
+  });
+  if(changed) save();
+  return changed;
+}
+
+/* ═══ A MEAL IS MORE THAN ONE DISH ═════════════════════════
+   A slot held exactly one recipe, so shepherd's pie with
+   broccoli and gravy meant either a bloated recipe or ten
+   near-identical versions of shepherd's pie. A meal is now a
+   list of dishes, each with a course, drawn from the same
+   recipe collection — so cauliflower cheese is a side one
+   week and a recipe in its own right the next.
+   ═════════════════════════════════════════════════════════ */
+var COURSES = ["Starter","Main","Side","Dessert"];
+
+/* Recipes filed under a given course, ordered like everything else. */
+function recipesForCourse(course, slot, day){
+  var reserved = {};
+  Object.keys(OWN_LIST_SLOTS).forEach(function(k){ reserved[OWN_LIST_SLOTS[k]] = true; });
+  return S.recipes
+    .filter(function(r){
+      if(course === "Dessert") return courseOf(r) === "Dessert" || r.category === "Treat meal";
+      if(reserved[r.category]) return false;
+      return courseOf(r) === course;
+    })
+    .filter(function(r){ return !recipeConflicts(r, day, slot).allergy.length; })
+    .sort(function(a, b){ return a.title.toLowerCase().localeCompare(b.title.toLowerCase()); });
+}
+function courseOf(r){
+  if(!r) return "Main";
+  if(r.course) return r.course;
+  var t = recipeText(r);
+  if(/\b(cheesecake|crumble|trifle|pudding|tart|sundae|brownie|pavlova|eton mess|ice cream|sorbet|gateau|profiterole|mousse)\b/.test(t)) return "Dessert";
+  if(/\b(soup|pate|paté|bruschetta|prawn cocktail|antipasti|garlic bread|starter|canape|dip)\b/.test(t)) return "Starter";
+  if(/\b(gravy|broccoli|green bean|carrot|cauliflower|peas|coleslaw|slaw|salad|chips|mash|roast potato|yorkshire|stuffing|sauce|dressing|side)\b/.test(t)
+     && !/\b(pie|casserole|curry|stew|bake|risotto|lasagne|roast chicken|roast beef)\b/.test(t)) return "Side";
+  return "Main";
+}
+function setCourse(rid, course){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  r.course = course; save(); openRecipe(rid);
+}
+
+/* Older plans stored a single dish. Fold it in as the main. */
+function cellItems(cell){
+  if(!cell.items){
+    cell.items = [];
+    if(cell.chosen){
+      var c = cell.chosen;
+      cell.items.push(Object.assign({}, c, {itemId:uid(), course:"Main", addedIds:cell.addedIds || []}));
+      delete cell.chosen;
+      delete cell.addedIds;
+    }
+  }
+  return cell.items;
+}
+function hasMeal(cell){ return cellItems(cell).length > 0; }
+function liveItem(it){
+  if(!it) return null;
+  if(!it.recipeId) return it;
+  var r = S.recipes.find(function(x){ return x.id === it.recipeId; });
+  if(!r) return it;
+  return {
+    itemId:it.itemId, course:it.course, recipeId:r.id,
+    title:r.title,
+    why:r.notes ? String(r.notes).split("\n")[0] : (it.why || "From your saved recipes"),
+    source:r.source || it.source || "Saved recipe", link:r.link || "",
+    serves:r.serves, prepMins:r.prepMins, cookMins:r.cookMins,
+    steps:(r.steps || []).slice(), buy:(r.ingredients || []).slice(), looks:it.looks
+  };
+}
+function liveItems(cell){
+  return cellItems(cell).map(liveItem).filter(Boolean)
+    .sort(function(a, b){ return COURSES.indexOf(a.course) - COURSES.indexOf(b.course); });
+}
+function mealTitle(cell){
+  var items = liveItems(cell);
+  if(!items.length) return "";
+  var main = items.filter(function(i){ return i.course === "Main"; })[0] || items[0];
+  var rest = items.length - 1;
+  return main.title + (rest ? " + " + rest + " more" : "");
+}
+function addToMeal(day, slot, rid, course){
+  var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
+  var cell = ensureCell(day, slot);
+  var items = cellItems(cell);
+  if(items.some(function(i){ return i.recipeId === rid; })){ toast("Already on this meal"); return; }
+  items.push({itemId:uid(), course:course || courseOf(r), recipeId:r.id,
+              title:r.title, source:r.source || "Saved recipe", link:r.link || ""});
+  r.lastUsed = Date.now();
+  rebuildShopFromPlan();
+  save(); renderPlan();
+  toast(r.title + " added");
+}
+function removeFromMeal(day, slot, itemId){
+  var cell = ensureCell(day, slot);
+  cell.items = cellItems(cell).filter(function(i){ return i.itemId !== itemId; });
+  rebuildShopFromPlan();
+  save(); renderPlan();
+}
+var addingCourse = {};        // which "add a course" picker is open, per slot
+function openCoursePicker(day, slot, course){
+  addingCourse[day + "::" + slot] = course;
+  renderPlan();
+}
+function closeCoursePicker(day, slot){
+  delete addingCourse[day + "::" + slot];
+  renderPlan();
 }
 
 </script>
@@ -3752,8 +3978,11 @@ function menuText(){
     var cells = S.plan[day]; if(!cells) return;
     var lines = [];
     ALL_SLOTS.forEach(sl => {
-      var lc = cells[sl] && liveChosen(cells[sl]);
-      if(lc) lines.push("  " + sl + ": " + lc.title);
+      if(!cells[sl]) return;
+      var its = liveItems(cells[sl]);
+      if(!its.length) return;
+      lines.push("  " + sl + ":");
+      its.forEach(function(it){ lines.push("    " + it.course + " — " + it.title); });
     });
     if(lines.length) out.push(day + " " + fmtDate(dayDate(i)), ...lines, "");
   });
@@ -3870,6 +4099,7 @@ function wipeAll(){
     refreshFoodOptions();
     requestPersistence();
     fixDuplicateColours();
+    tidyIngredients();
     renderBackupNudge();
     migratePhotosToIDB().then(function(n){
       if(n){ renderRecipes(); toast(n + " photos moved to roomier storage"); }
