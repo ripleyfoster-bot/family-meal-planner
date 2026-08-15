@@ -524,7 +524,7 @@ body.dark .rmeta span{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "2026.08.22";
+var VERSION = "2026.08.23";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1031,7 +1031,8 @@ function renderPlan(){
     var cell = ensureCell(day, slot);
     var key = day + "::" + slot, open = openSlots.has(key);
     var eating = eatersFor(day, slot);
-    var sub = cell.chosen ? cell.chosen.title
+    var live = liveChosen(cell);
+    var sub = live ? live.title
             : eating.length ? eating.length + (eating.length===1?" eating":" eating") : "nobody eating";
     html += '<div class="slot"><div class="slot-hd" onclick="toggleSlot(\'' + esc(day) + '\',\'' + esc(slot) + '\')">'
           + '<div class="ttl"><b>' + esc(slot) + '</b><div>' + esc(sub) + '</div></div>'
@@ -1072,7 +1073,7 @@ function slotBody(day, slot, cell, eating){
   }
 
   if(cell.chosen){
-    var c = cell.chosen;
+    var c = liveChosen(cell);
     var cMeta = [];
     if(c.serves) cMeta.push("serves " + c.serves);
     if(c.prepMins) cMeta.push(fmtMins(c.prepMins) + " prep");
@@ -1219,7 +1220,21 @@ function addIngredients(list, mealTitle){
     var existing = S.shop.find(i => sameItem(normalise(i.name), n) && i.status !== "bought");
     if(existing){
       if(!existing.meals.includes(mealTitle)) existing.meals.push(mealTitle);
-      if(p.qty) existing.extra = (existing.extra || []).concat([(p.qty + " " + p.unit).trim()]);
+      /* Two recipes wanting 250g of bacon means 500g, not 250g. Amounts in
+         the same unit are added; anything that will not add is kept beside
+         it so nothing is silently dropped. */
+      var have = parseAmount([existing.qty, existing.unit].filter(Boolean).join(" "));
+      var more = parseAmount([p.qty, p.unit].filter(Boolean).join(" "));
+      if(more){
+        if(have && have.unit === more.unit){
+          var parts = amountParts(addAmounts(have, more));
+          existing.qty = parts.qty; existing.unit = parts.unit;
+        } else if(!have){
+          existing.qty = p.qty; existing.unit = p.unit;
+        } else {
+          existing.extra = (existing.extra || []).concat([fmtAmount(more)]);
+        }
+      }
       added.push(existing.id);
       return;
     }
@@ -1325,6 +1340,7 @@ function renderShop(){
         + '<div class="grow" onclick="toggleShopEditor(\'' + i.id + '\')" style="cursor:pointer">'
         + '<div class="nm">' + esc(i.name) + (q ? ' <span class="qty">' + esc(q) + '</span>' : "") + '</div>'
         + (packLine ? '<div class="mt"><b>' + esc(packLine) + '</b></div>' : "")
+        + ((i.extra && i.extra.length) ? '<div class="mt">plus ' + esc(i.extra.join(", ")) + '</div>' : "")
         + (meals ? '<div class="mt">' + esc(meals) + '</div>' : "") + '</div>'
         + (i.status === "have"
             ? '<span class="cupboard-flag">In cupboard</span><button class="mini" onclick="setStatus(\'' + i.id + '\',\'need\')">Need it</button>'
@@ -1534,7 +1550,9 @@ async function loadSuggestions(day, slot){
 
   var planned = [];
   orderedDays().forEach(d => {
-    if(S.plan[d]) Object.values(S.plan[d]).forEach(c => { if(c.chosen) planned.push(c.chosen.title); });
+    if(S.plan[d]) Object.values(S.plan[d]).forEach(function(c){
+      var lc = liveChosen(c); if(lc) planned.push(lc.title);
+    });
   });
   var stds = Object.keys(S.standards).filter(k => k.split("||")[0] === slot).map(k => k.split("||").slice(1).join("||"));
   var cupboard = S.cupboard.map(c => c.name).join(", ");
@@ -2277,7 +2295,10 @@ function saveRecipeEdit(id){
   r.source = document.getElementById("er-src").value.trim();
   r.link = document.getElementById("er-link").value.trim();
   delete r.method;
-  refreshFoodOptions(); save(); openRecipe(id); toast("Saved");
+  var touched = resyncPlanned(id);
+  refreshFoodOptions(); save(); openRecipe(id);
+  toast(touched ? "Saved — " + touched + " planned meal" + (touched === 1 ? "" : "s") + " updated"
+                : "Saved");
 }
 function recipeToShop(id){
   var r = S.recipes.find(x => x.id === id); if(!r) return;
@@ -2882,6 +2903,7 @@ function saveIngredient(rid, idx){
   r.ingredients[idx] = parsed;
   learnFood(parsed.name, {use:"recipe"});
   editingIng = null;
+  resyncPlanned(rid);
   refreshFoodOptions(); save(); openRecipe(rid);
   toast("Ingredient updated");
 }
@@ -2889,6 +2911,7 @@ function removeIngredient(rid, idx){
   var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
   r.ingredients.splice(idx, 1);
   editingIng = null;
+  resyncPlanned(rid);
   save(); openRecipe(rid);
 }
 function addIngredientRow(rid){
@@ -3227,6 +3250,15 @@ function fmtAmount(a){
   if(n === 1) u = u.replace(/s$/, "");
   return n + " " + u;
 }
+function amountParts(a){
+  if(!a) return {qty:"", unit:""};
+  if(a.unit === "g")  return a.n >= 1000 ? {qty:String(+(a.n/1000).toFixed(3)), unit:"kg"}
+                                         : {qty:String(Math.round(a.n)), unit:"g"};
+  if(a.unit === "ml") return a.n >= 1000 ? {qty:String(+(a.n/1000).toFixed(3)), unit:"l"}
+                                         : {qty:String(Math.round(a.n)), unit:"ml"};
+  var n = Math.round(a.n * 100) / 100;
+  return {qty:String(n), unit:(a.unit === "each" ? "" : a.unit)};
+}
 function addAmounts(a, b){
   if(!a) return b;
   if(!b) return a;
@@ -3305,6 +3337,73 @@ function syncRestock(c){
   } else if(existing){
     S.shop = S.shop.filter(function(i){ return i !== existing; });
   }
+}
+
+/* ═══ KEEPING THE PLAN IN STEP WITH THE RECIPE ═════════════
+   Choosing a meal copied the recipe into the week's plan, so
+   editing the recipe afterwards changed nothing you could see
+   and left the shopping list on the old ingredients. A planned
+   meal now reads through to the recipe it came from.
+   ═════════════════════════════════════════════════════════ */
+function liveChosen(cell){
+  var c = cell && cell.chosen;
+  if(!c) return null;
+  if(!c.recipeId) return c;
+  var r = S.recipes.find(function(x){ return x.id === c.recipeId; });
+  if(!r) return c;                       // recipe deleted — keep the snapshot
+  return {
+    title:r.title,
+    why:r.notes ? String(r.notes).split("\n")[0] : (c.why || "From your saved recipes"),
+    source:r.source || c.source || "Saved recipe",
+    link:r.link || "",
+    serves:r.serves, prepMins:r.prepMins, cookMins:r.cookMins,
+    steps:(r.steps || []).slice(),
+    buy:(r.ingredients || []).slice(),
+    recipeId:r.id, looks:c.looks
+  };
+}
+/* Once two meals share a line — 250g of bacon plus another 250g — you
+   cannot unpick one meal's share from it. So an edit rebuilds the whole
+   list from the plan, keeping anything you added yourself, anything
+   already in the trolley, and the prices and cupboard marks you set. */
+function rebuildShopFromPlan(){
+  var carried = {};
+  S.shop.forEach(function(i){
+    var k = normalise(i.name);
+    if(!carried[k]) carried[k] = {status:i.status, price:i.price, priceGuess:i.priceGuess, aisle:i.aisle};
+  });
+  S.shop = S.shop.filter(function(i){
+    return i.manual || i.restock || i.status === "bought";
+  });
+
+  Object.keys(S.plan).forEach(function(day){
+    var cells = S.plan[day];
+    Object.keys(cells).forEach(function(slot){
+      var cell = cells[slot];
+      var lc = liveChosen(cell);
+      if(!lc){ cell.addedIds = []; return; }
+      cell.addedIds = addIngredients((lc.buy || []).concat(lc.pantry || []), lc.title);
+    });
+  });
+
+  S.shop.forEach(function(i){
+    var was = carried[normalise(i.name)];
+    if(!was) return;
+    if(was.status === "have" || was.status === "bought") i.status = was.status;
+    if(was.price != null){ i.price = was.price; i.priceGuess = was.priceGuess; }
+    if(was.aisle) i.aisle = was.aisle;
+  });
+}
+function resyncPlanned(recipeId){
+  var n = 0;
+  Object.keys(S.plan).forEach(function(day){
+    var cells = S.plan[day];
+    Object.keys(cells).forEach(function(slot){
+      if(cells[slot].chosen && cells[slot].chosen.recipeId === recipeId) n++;
+    });
+  });
+  if(n) rebuildShopFromPlan();
+  return n;
 }
 
 </script>
@@ -3652,7 +3751,10 @@ function menuText(){
   orderedDays().forEach((day, i) => {
     var cells = S.plan[day]; if(!cells) return;
     var lines = [];
-    ALL_SLOTS.forEach(sl => { if(cells[sl] && cells[sl].chosen) lines.push("  " + sl + ": " + cells[sl].chosen.title); });
+    ALL_SLOTS.forEach(sl => {
+      var lc = cells[sl] && liveChosen(cells[sl]);
+      if(lc) lines.push("  " + sl + ": " + lc.title);
+    });
     if(lines.length) out.push(day + " " + fmtDate(dayDate(i)), ...lines, "");
   });
   return out.length > 2 ? out.join("\n").trim() : "Nothing planned yet.";
