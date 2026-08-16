@@ -210,6 +210,25 @@ body.dark .rmeta span{color:var(--ink);}
   padding:10px 12px;font-size:12.5px;line-height:1.45;margin-bottom:9px;}
 /* The quantity is what you read in the aisle, so it gets its own
    column between the tick and the name rather than trailing after it. */
+/* Day / Week switch, and the week overview itself. */
+.seg{display:flex;gap:4px;background:var(--line);padding:3px;border-radius:var(--r-md);margin-bottom:11px;}
+.seg-b{flex:1;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:600;
+  padding:8px 0;border-radius:calc(var(--r-md) - 3px);cursor:pointer;font-family:inherit;}
+.seg-b.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.10);}
+.wday{background:var(--card);border-radius:var(--r-md);margin-bottom:9px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);}
+.wday.today{outline:2px solid var(--accent);}
+.wday-h{display:flex;align-items:baseline;gap:8px;padding:11px 13px 8px;cursor:pointer;}
+.wday-h b{font-size:15px;}
+.wday-h span{font-size:12.5px;color:var(--muted);}
+.wday-h .count{margin-left:auto;font-size:11.5px;color:var(--muted);}
+.wrow{display:flex;gap:9px;padding:8px 13px;border-top:1px solid var(--line);
+  font-size:13.5px;cursor:pointer;align-items:baseline;}
+.wrow .sl{min-width:64px;flex-shrink:0;color:var(--muted);font-size:12px;text-transform:uppercase;
+  letter-spacing:.03em;padding-top:1px;}
+.wrow .ml{flex:1;min-width:0;}
+.wrow.none .ml{color:var(--muted);font-style:italic;}
+.wrow .extra{display:block;font-size:12px;color:var(--muted);margin-top:2px;}
 .qbox{min-width:62px;max-width:82px;flex-shrink:0;text-align:center;
   background:var(--accent-soft);color:var(--accent);border-radius:var(--r-sm);
   padding:6px 5px;font-size:13.5px;font-weight:600;line-height:1.25;
@@ -242,12 +261,28 @@ body.dark .qbox{color:var(--ink);}
   <div class="banner" id="nudge-plan" hidden></div>
   <div id="plan-setup" class="empty" hidden></div>
   <div id="plan-main" hidden>
-    <div class="daybar">
-      <button class="nav" onclick="changeDay(-1)" aria-label="Previous day">‹</button>
-      <div class="lbl"><b id="day-name">—</b><span id="day-date"></span></div>
-      <button class="nav" onclick="changeDay(1)" aria-label="Next day">›</button>
+    <div class="seg" id="plan-view-seg">
+      <button class="seg-b" data-v="day" onclick="setPlanView('day')">Day</button>
+      <button class="seg-b" data-v="week" onclick="setPlanView('week')">Week</button>
     </div>
-    <div id="slots"></div>
+
+    <div id="plan-week" hidden>
+      <div class="daybar">
+        <button class="nav" onclick="changeWeek(-1)" aria-label="Previous week">‹</button>
+        <div class="lbl"><b id="week-name">—</b><span id="week-range"></span></div>
+        <button class="nav" onclick="changeWeek(1)" aria-label="Next week">›</button>
+      </div>
+      <div id="week-body"></div>
+    </div>
+
+    <div id="plan-day">
+      <div class="daybar">
+        <button class="nav" onclick="changeDay(-1)" aria-label="Previous day">‹</button>
+        <div class="lbl"><b id="day-name">—</b><span id="day-date"></span></div>
+        <button class="nav" onclick="changeDay(1)" aria-label="Next day">›</button>
+      </div>
+      <div id="slots"></div>
+    </div>
   </div>
 </div>
 
@@ -499,6 +534,10 @@ body.dark .qbox{color:var(--ink);}
   <div class="card">
     <div class="hint">Everything lives on this phone. Take a copy before clearing Safari data or changing handset.</div>
     <div class="hint" id="backup-state" style="margin-top:6px;font-weight:600">—</div>
+    <label class="fld">This device is called</label>
+    <input type="text" id="dev-name" onchange="setDeviceName(this.value)" placeholder="iPhone">
+    <div class="hint" style="margin-top:5px">Shown when another device imports your backup, so you can tell
+      which copy is which.</div>
     <div class="row" style="margin-top:11px">
       <button class="btn ghost sm" onclick="exportData()">Export</button>
       <button class="btn ghost sm" onclick="document.getElementById('import-in').click()">Import</button>
@@ -508,7 +547,9 @@ body.dark .qbox{color:var(--ink);}
       much larger but is the only version that carries your recipe pictures to another device.</div>
     <input type="file" id="import-in" accept=".json" hidden onchange="importData(event)">
     <div class="hint" style="margin-top:8px">Import <b>replaces</b> what is on this phone — it does not merge.
-      Export first if there is anything here you want to keep.</div>
+      It will tell you which copy is newer before it does anything.</div>
+    <div class="sec-hd" style="margin-top:14px;padding-left:0">Recent backups</div>
+    <div id="export-log" class="hint">—</div>
   </div>
 
   <div class="sec-hd">Start again</div>
@@ -534,7 +575,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "29";
+var VERSION = "31";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -820,7 +861,8 @@ function blankState(){
     members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{},
     plan:{}, standards:{}, recipes:[], shop:[], cupboard:[],
     stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
-    prices:{}, spend:[], aliases:{}, foods:{}, lastExport:null,
+    prices:{}, spend:[], aliases:{}, foods:{}, lastExport:null, planView:"day",
+    deviceId:"", deviceName:"", gen:0, savedAt:0, savedBy:"", exportLog:[],
     dayIdx:0, weekOffset:0, apiKey:"",
     theme:"pine", mode:"auto"
   };
@@ -832,6 +874,7 @@ var shopView = "list";
 var scanPages = [], scanResult = null;
 
 function save(){
+  stampSave();
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
   catch(e){ toast("Couldn't save — storage may be full"); }
 }
@@ -1012,6 +1055,12 @@ function changeDay(dir){
   if(S.dayIdx >= n){ S.dayIdx = 0; S.weekOffset++; }
   save(); renderPlan();
 }
+/* Week view steps a whole week at a time. */
+function changeWeek(d){
+  S.weekOffset += d;
+  if(S.dayIdx >= orderedDays().length) S.dayIdx = 0;
+  save(); renderPlan();
+}
 function renderPlan(){
   updateBadge();
   renderBackupNudge();
@@ -1023,6 +1072,15 @@ function renderPlan(){
     return;
   }
   setup.hidden = true; main.hidden = false;
+
+  /* Two ways of looking at the same plan. */
+  var weekly = S.planView === "week";
+  document.getElementById("plan-week").hidden = !weekly;
+  document.getElementById("plan-day").hidden = weekly;
+  [].forEach.call(document.getElementById("plan-view-seg").children, function(b){
+    b.className = "seg-b" + (b.getAttribute("data-v") === (weekly ? "week" : "day") ? " on" : "");
+  });
+  if(weekly){ renderWeek(); return; }
 
   var days = orderedDays(), day = days[S.dayIdx];
   document.getElementById("day-name").textContent = day;
@@ -2791,8 +2849,25 @@ function renderBackupNudge(){
     }
   });
   var state = document.getElementById("backup-state");
-  if(state) state.textContent = d === null ? "No backup taken yet."
-    : "Last backup " + (d === 0 ? "today" : d + " days ago") + ".";
+  if(state){
+    state.textContent = (d === null ? "No backup taken yet." : "Last backup " + ago(S.lastExport) + ".")
+      + (unsavedSince() ? " Changes since then." : "");
+  }
+  var nameEl = document.getElementById("dev-name");
+  if(nameEl && document.activeElement !== nameEl) nameEl.value = S.deviceName || "";
+  var log = document.getElementById("export-log");
+  if(log){
+    var rows = (S.exportLog || []);
+    log.innerHTML = rows.length
+      ? rows.slice(0, 6).map(function(x){
+          return '<div style="display:flex;gap:8px;padding:3px 0">'
+            + '<span style="flex:1">' + esc(new Date(x.at).toLocaleString("en-GB",
+                {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"})) + '</span>'
+            + '<span>' + (x.kind === "full" ? "with photos" : "data only") + '</span>'
+            + '<span style="min-width:56px;text-align:right">' + fmtBytes(x.bytes || 0) + '</span></div>';
+        }).join("")
+      : "Nothing exported from this device yet.";
+  }
 }
 
 /* ═══ CONNECTION TEST ══════════════════════════════════════
@@ -3820,6 +3895,226 @@ function seedPacks(){
   return n;
 }
 
+/* ═══ WEEK VIEW ════════════════════════════════════════════
+   Planning a week one day at a time meant never seeing the
+   week. This lays all seven days out at once: what is planned,
+   what is empty, and how much is still to decide. Tapping
+   anything drops into that day with the meal open.
+   ═════════════════════════════════════════════════════════ */
+function setPlanView(v){
+  S.planView = (v === "week") ? "week" : "day";
+  save(); renderPlan();
+}
+function planSlots(){
+  return ALL_SLOTS.filter(function(sl){
+    return S.slots.indexOf(sl) !== -1
+        || S.members.some(function(m){ return slotsForMember(m.id).indexOf(sl) !== -1; });
+  });
+}
+function jumpToDay(i, slot){
+  S.dayIdx = i;
+  S.planView = "day";
+  if(slot) openSlots.add(orderedDays()[i] + "::" + slot);
+  save(); renderPlan();
+  var el = document.getElementById("v-plan");
+  if(el) el.scrollTop = 0;
+}
+function todayIndex(){
+  var days = orderedDays();
+  var now = new Date(); now.setHours(0,0,0,0);
+  for(var i = 0; i < days.length; i++){
+    var d = dayDate(i); d.setHours(0,0,0,0);
+    if(d.getTime() === now.getTime()) return i;
+  }
+  return -1;
+}
+function renderWeek(){
+  var days = orderedDays();
+  var slots = planSlots();
+  var first = dayDate(0), last = dayDate(days.length - 1);
+  document.getElementById("week-name").textContent =
+    S.weekOffset === 0 ? "This week" : S.weekOffset === 1 ? "Next week"
+    : S.weekOffset === -1 ? "Last week" : "Week of " + fmtDate(first);
+  document.getElementById("week-range").textContent = fmtDate(first) + " – " + fmtDate(last);
+
+  if(!slots.length){
+    document.getElementById("week-body").innerHTML =
+      '<div class="empty">No meals set up.<br><br><button class="btn" onclick="goTab(\'settings\')">Choose meals</button></div>';
+    return;
+  }
+
+  var ti = todayIndex();
+  var html = "", planned = 0, total = 0;
+
+  days.forEach(function(day, i){
+    var rows = "", donehere = 0;
+    slots.forEach(function(slot){
+      var eating = eatersFor(day, slot);
+      if(!eating.length) return;                 // nobody eating, nothing to plan
+      total++;
+      var cell = ensureCell(day, slot);
+      var items = liveItems(cell);
+      if(items.length){ planned++; donehere++; }
+      var main = items.filter(function(x){ return x.course === "Main"; })[0] || items[0];
+      var extras = items.filter(function(x){ return x !== main; });
+      rows += '<div class="wrow' + (items.length ? "" : " none") + '"'
+        + ' onclick="jumpToDay(' + i + ',\'' + esc(slot) + '\')">'
+        + '<span class="sl">' + esc(slot) + '</span>'
+        + '<span class="ml">' + (main ? esc(main.title) : "not planned")
+        + (extras.length
+            ? '<span class="extra">' + extras.map(function(x){ return esc(x.title); }).join(" · ") + '</span>'
+            : "")
+        + '</span></div>';
+    });
+    if(!rows) return;
+    html += '<div class="wday' + (i === ti ? " today" : "") + '">'
+      + '<div class="wday-h" onclick="jumpToDay(' + i + ')">'
+      + '<b>' + esc(day) + '</b><span>' + esc(fmtDate(dayDate(i))) + '</span>'
+      + '<span class="count">' + donehere + '/' + slots.filter(function(sl){
+            return eatersFor(day, sl).length; }).length + '</span></div>'
+      + rows + '</div>';
+  });
+
+  var left = total - planned;
+  html = '<div class="hint" style="margin-bottom:10px">'
+    + (total === 0 ? "Nobody eating this week."
+       : left === 0 ? "The whole week is planned."
+       : planned + " of " + total + " meals planned — " + left + " still to decide.")
+    + '</div>' + html;
+  document.getElementById("week-body").innerHTML = html;
+}
+
+/* ═══ DEVICE IDENTITY AND STALENESS ════════════════════════
+   Several devices sharing one backup file only goes wrong in
+   one way: importing a copy older than what you already have.
+   Every save stamps this device and bumps a counter, so an
+   import can say plainly which copy is newer and what would
+   be lost. Nothing here syncs anything — it makes the manual
+   round trip safe to do.
+   ═════════════════════════════════════════════════════════ */
+function guessDeviceName(){
+  var ua = String(navigator.userAgent || "");
+  if(/iPad/.test(ua)) return "iPad";
+  if(/iPhone/.test(ua)) return "iPhone";
+  if(/Macintosh/.test(ua)) return "Mac";
+  if(/Android/.test(ua)) return "Android phone";
+  if(/Windows/.test(ua)) return "PC";
+  return "This device";
+}
+function ensureDevice(){
+  if(!S.deviceId) S.deviceId = uid() + uid();
+  if(!S.deviceName) S.deviceName = guessDeviceName();
+  if(!S.gen) S.gen = 1;
+  if(!S.exportLog) S.exportLog = [];
+}
+/* Called from save() — every change moves the counter on. */
+function stampSave(){
+  ensureDevice();
+  S.gen = (S.gen || 0) + 1;
+  S.savedAt = Date.now();
+  S.savedBy = S.deviceName;
+}
+function setDeviceName(v){
+  S.deviceName = String(v || "").trim() || guessDeviceName();
+  save(); renderSettings();
+}
+function unsavedSince(){
+  if(!S.lastExport) return S.gen > 1;
+  return (S.savedAt || 0) > S.lastExport;
+}
+function ago(ts){
+  if(!ts) return "never";
+  var m = Math.round((Date.now() - ts) / 60000);
+  if(m < 1) return "just now";
+  if(m < 60) return m + " min ago";
+  var hrs = Math.round(m / 60);
+  if(hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+  var d = Math.round(hrs / 24);
+  return d + (d === 1 ? " day ago" : " days ago");
+}
+function backupMeta(kind){
+  ensureDevice();
+  return {deviceId:S.deviceId, deviceName:S.deviceName, gen:S.gen,
+          savedAt:S.savedAt || Date.now(), exportedAt:Date.now(), kind:kind,
+          counts:{recipes:S.recipes.length, photos:S.recipes.filter(function(r){ return r.hasPhoto; }).length,
+                  cupboard:S.cupboard.length, members:S.members.length}};
+}
+function logExport(kind, bytes){
+  ensureDevice();
+  S.exportLog.unshift({at:Date.now(), device:S.deviceName, kind:kind, bytes:bytes, gen:S.gen});
+  S.exportLog = S.exportLog.slice(0, 20);
+  S.lastExport = Date.now();
+  save();
+}
+
+/* iOS cannot write to a folder on its own, but it can hand the file
+   straight to the share sheet, which is two taps to iCloud Drive. */
+async function deliverFile(json, filename, kind){
+  var blob = new Blob([json], {type:"application/json"});
+  var bytes = json.length;
+  try{
+    if(navigator.canShare){
+      var file = new File([blob], filename, {type:"application/json"});
+      if(navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:"Meal planner backup"});
+        logExport(kind, bytes);
+        renderBackupNudge(); renderSettings();
+        return "shared";
+      }
+    }
+  }catch(e){
+    if(e && e.name === "AbortError"){ toast("Backup cancelled — nothing saved"); return "cancelled"; }
+  }
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+  logExport(kind, bytes);
+  renderBackupNudge(); renderSettings();
+  return "downloaded";
+}
+
+/* Decide, out loud, whether an incoming file is newer or older. */
+function compareBackup(incoming){
+  var mine = {gen:S.gen || 0, savedAt:S.savedAt || 0, device:S.deviceName || "this device",
+              recipes:S.recipes.length};
+  var meta = incoming._meta || {};
+  var theirs = {gen:meta.gen || 0, savedAt:meta.savedAt || meta.exportedAt || 0,
+                device:meta.deviceName || "another device",
+                recipes:(incoming.recipes || []).length};
+  var sameDevice = meta.deviceId && meta.deviceId === S.deviceId;
+  var verdict = !theirs.savedAt ? "unknown"
+              : theirs.savedAt > mine.savedAt ? "newer"
+              : theirs.savedAt < mine.savedAt ? "older" : "same";
+  return {mine:mine, theirs:theirs, sameDevice:sameDevice, verdict:verdict,
+          recipeDelta:theirs.recipes - mine.recipes};
+}
+function importWarning(cmp){
+  var t = cmp.theirs, m = cmp.mine;
+  var lines = [];
+  if(cmp.verdict === "unknown"){
+    lines.push("This backup has no date stamp — it was made by an older version of the app.");
+  } else if(cmp.verdict === "older"){
+    lines.push("⚠ This backup is OLDER than the data on this device.");
+    lines.push("");
+    lines.push("Backup:  " + t.recipes + " recipes, saved " + ago(t.savedAt) + " on " + t.device);
+    lines.push("Here:    " + m.recipes + " recipes, saved " + ago(m.savedAt));
+    if(cmp.recipeDelta < 0) lines.push("");
+    if(cmp.recipeDelta < 0) lines.push("You would lose " + Math.abs(cmp.recipeDelta) + " recipes.");
+  } else if(cmp.verdict === "newer"){
+    lines.push("This backup is newer than the data on this device.");
+    lines.push("");
+    lines.push("Backup:  " + t.recipes + " recipes, saved " + ago(t.savedAt) + " on " + t.device);
+    lines.push("Here:    " + m.recipes + " recipes, saved " + ago(m.savedAt));
+  } else {
+    lines.push("This backup matches what is already here.");
+  }
+  lines.push("");
+  lines.push("Importing REPLACES everything on this device. Continue?");
+  return lines.join("\n");
+}
+
 </script>
 <script>
 /* ═══ HOUSEHOLD ════════════════════════════════════════════ */
@@ -4192,55 +4487,52 @@ function copyMenu(){ copyText(menuText(), "Menu copied"); }
 function shareMenu(){ window.open("sms:?&body=" + encodeURIComponent(menuText())); }
 
 /* ── backup ── */
-function exportData(){
+async function exportData(){
   var out = JSON.parse(JSON.stringify(S));
   delete out.apiKey;                       // never leaves the device in a backup file
-  var blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
-  var a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "meal-planner-backup-" + new Date().toISOString().slice(0,10) + ".json";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  noteExport();
-  toast("Backup saved — the API key is not included");
+  delete out.exportLog;                    // the log is this device's own record
+  out._meta = backupMeta("data");
+  var r = await deliverFile(JSON.stringify(out, null, 2),
+    "meal-planner-" + new Date().toISOString().slice(0,10) + ".json", "data");
+  if(r !== "cancelled") toast("Backup ready — save it to your iCloud folder");
 }
 /* Photos live outside the main data, so a full backup has to gather
    them back in. Kept separate because it is far bigger and slower. */
-function exportFull(){
+async function exportFull(){
   toast("Gathering photos…");
   var out = JSON.parse(JSON.stringify(S));
   delete out.apiKey;
+  delete out.exportLog;
+  out._meta = backupMeta("full");
   out._photos = {};
   var jobs = S.recipes.filter(function(r){ return r.hasPhoto; }).map(function(r){
     return idbGet(r.id).then(function(d){ if(d) out._photos[r.id] = d; }).catch(function(){});
   });
-  Promise.all(jobs).then(function(){
-    var json = JSON.stringify(out);
-    var blob = new Blob([json], {type:"application/json"});
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "meal-planner-full-" + new Date().toISOString().slice(0,10) + ".json";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
-    noteExport();
-    toast("Full backup saved (" + Math.round(json.length / 1024 / 1024 * 10) / 10 + "MB)");
-  });
+  await Promise.all(jobs);
+  var json = JSON.stringify(out);
+  var r = await deliverFile(json,
+    "meal-planner-full-" + new Date().toISOString().slice(0,10) + ".json", "full");
+  if(r !== "cancelled"){
+    toast("Full backup ready (" + Math.round(json.length / 1024 / 1024 * 10) / 10 + "MB)");
+  }
 }
 function importData(ev){
   var f = ev.target.files[0]; if(!f) return;
-  var have = S.recipes.length;
-  if(have && !confirm("This REPLACES everything on this phone — it does not merge.\n\n"
-      + "You currently have " + have + " recipe" + (have === 1 ? "" : "s")
-      + ". They will be removed.\n\nContinue?")){
-    ev.target.value = ""; return;
-  }
   var r = new FileReader();
   r.onload = e => {
     try{
       var d = JSON.parse(e.target.result);
       if(!d.members) throw new Error("shape");
+      /* Say which copy is newer before replacing anything. This is the
+         whole point of the device stamps — an older file overwriting a
+         newer one is the only way this goes badly wrong. */
+      if(S.recipes.length && !confirm(importWarning(compareBackup(d)))){
+        ev.target.value = ""; return;
+      }
       var key = S.apiKey;
+      var myId = S.deviceId, myName = S.deviceName, myLog = S.exportLog;
       S = blankState();
+      S.deviceId = myId; S.deviceName = myName; S.exportLog = myLog || [];
       Object.keys(blankState()).forEach(k => { if(d[k] !== undefined) S[k] = d[k]; });
       S.apiKey = key;
       if(!S.stores || !S.stores.length){
@@ -4286,6 +4578,7 @@ function wipeAll(){
     if(!S.foods || !Object.keys(S.foods).length) seedCatalogue();
     refreshFoodOptions();
     requestPersistence();
+    ensureDevice();
     fixDuplicateColours();
     tidyIngredients();
     var rep = repairAllIngredients();
