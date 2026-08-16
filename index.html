@@ -216,6 +216,7 @@ body.dark .rmeta span{color:var(--ink);}
   overflow-wrap:anywhere;}
 body.dark .qbox{color:var(--ink);}
 .qbox.empty{background:transparent;color:var(--muted);font-weight:400;}
+.qbox.pack{background:var(--accent);color:var(--accent-ink);}
 .shop-row.bought .qbox{opacity:.5;}
 .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--ink);
   color:var(--bg);padding:10px 16px;border-radius:22px;font-size:13px;z-index:99;
@@ -533,7 +534,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "28";
+var VERSION = "29";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1264,6 +1265,8 @@ function addIngredients(list, mealTitle){
   (list || []).forEach(raw => {
     var p = parseIngredient(raw);
     if(!p.name) return;
+    /* Spoons and pinches are cupboard business, not a shopping decision. */
+    if(isSeasoning(p)){ ensureCupboard(p.name); return; }
     var n = normalise(p.name);
     var existing = S.shop.find(i => sameItem(normalise(i.name), n) && i.status !== "bought");
     if(existing){
@@ -1380,12 +1383,16 @@ function renderShop(){
       var q = [i.qty, i.unit].filter(Boolean).join(" ");
       var meals = (i.meals || []).join(", ");
       var pk = packsNeeded(i.name, parseAmount(q));
-      var packLine = pk ? "buy " + pk.count + " \u00d7 " + pk.pack
-                   : (packFor(i.name) ? "sold as " + packFor(i.name) : "");
+      /* What goes in the trolley is the headline; what the recipes need
+         goes underneath, so the arithmetic is visible rather than implied. */
+      var boxText = pk ? pk.count + " \u00d7 " + pk.pack : (q || "\u2014");
+      var packLine = pk
+        ? "needs " + pk.need + (pk.assumed ? " (assumed)" : "")
+        : (packFor(i.name) ? "sold as " + packFor(i.name) : "");
       html += '<div class="shop-row ' + (i.status === "bought" ? "bought" : i.status === "have" ? "have" : "") + '">'
         + '<div class="chk' + (i.status === "bought" ? " done" : "") + '" onclick="cycleStatus(\'' + i.id + '\')">'
         + (i.status === "bought" ? "✓" : "") + '</div>'
-        + '<div class="qbox' + (q ? "" : " empty") + '">' + esc(q || "\u2014") + '</div>'
+        + '<div class="qbox' + (q ? "" : " empty") + (pk ? " pack" : "") + '">' + esc(boxText) + '</div>'
         + '<div class="grow" onclick="toggleShopEditor(\'' + i.id + '\')" style="cursor:pointer">'
         + '<div class="nm">' + esc(i.name) + '</div>'
         + (packLine ? '<div class="mt"><b>' + esc(packLine) + '</b></div>' : "")
@@ -3369,9 +3376,21 @@ function setPack(name, packText){
 }
 /* "700g needed, sold in 500g pots" -> 2 pots. */
 function packsNeeded(name, amount){
-  var pack = parseAmount(packFor(name));
-  if(!pack || !amount || pack.unit !== amount.unit || !pack.n) return null;
-  return {count:Math.ceil(amount.n / pack.n), pack:packFor(name)};
+  var packText = packFor(name);
+  var pack = parseAmount(packText);
+  if(!pack || !amount || !pack.n) return null;
+  var need = amount;
+  /* A bare number against something sold by weight is almost always that
+     weight — "65" of gravy granules sold in a 200g pot means 65g, not 65
+     pots. Refusing to guess just left the shopper with a meaningless 65. */
+  var assumed = false;
+  if(need.unit === "each" && (pack.unit === "g" || pack.unit === "ml")){
+    need = {n:need.n, unit:pack.unit};
+    assumed = true;
+  }
+  if(need.unit !== pack.unit) return null;
+  return {count:Math.ceil(need.n / pack.n), pack:packText,
+          need:fmtAmount(need), assumed:assumed, packEach:pack};
 }
 
 var STOCK = ["in", "low", "out"];
@@ -3640,6 +3659,165 @@ function openCoursePicker(day, slot, course){
 function closeCoursePicker(day, slot){
   delete addingCourse[day + "::" + slot];
   renderPlan();
+}
+
+/* ═══ REPAIRING CAPTURED QUANTITIES ════════════════════════
+   Scanning drops units and traps numbers inside names, which
+   is why "65g of gravy granules" became a bare 65 that no pack
+   rule could reconcile. These patterns came from a real export:
+     "2 x 200 g steaks"        -> 400 g steaks
+     "5-6 tbsp water"          -> 6 tbsp water
+     "Bacon 6 rashers"         -> Bacon, sold as 6 rashers
+     "salmon fillets 120g each)" -> salmon fillets, 120g each
+   ═════════════════════════════════════════════════════════ */
+var SIZE_TAIL = /[\s(]*\b(\d+(?:\.\d+)?)\s*(g|kg|ml|l)\b\s*(each|total|approx\.?|per pack)?\s*\)?\s*$/i;
+var COUNT_TAIL = /[\s(]*\b(\d+)\s*(rashers?|slices?|pieces?|fillets?|nests?|packs?|sachets?|cubes?|pots?)\s*\)?\s*$/i;
+var LEAD_QTY = /^\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?\s*(kg|g|ml|l|tbsp|tsp|x)?\s+/i;
+
+function repairIngredient(g){
+  var out = {name:String(g.name || "").trim(),
+             qty:String(g.qty == null ? "" : g.qty).trim(),
+             unit:String(g.unit || "").trim(),
+             prep:g.prep || ""};
+  var changed = false;
+
+  /* "2 x 200 g steaks" — the real amount is the product of the two. */
+  if(/^x$/i.test(out.unit)){
+    var m = out.name.match(LEAD_QTY);
+    if(m && m[3] && /^(kg|g|ml|l)$/i.test(m[3])){
+      var each = parseFloat(m[1]) * (parseFloat(out.qty) || 1);
+      out.qty = String(each); out.unit = m[3].toLowerCase();
+      out.name = out.name.slice(m[0].length).trim();
+      changed = true;
+    }
+  }
+
+  /* A quantity sitting at the front of the name because none was captured. */
+  if(!out.qty){
+    var lm = out.name.match(LEAD_QTY);
+    if(lm){
+      /* "5-6 tbsp" — take the larger, since running short is the worse error. */
+      out.qty = String(lm[2] ? Math.max(parseFloat(lm[1]), parseFloat(lm[2])) : parseFloat(lm[1]));
+      if(lm[3] && !/^x$/i.test(lm[3])) out.unit = lm[3].toLowerCase();
+      out.name = out.name.slice(lm[0].length).trim();
+      changed = true;
+    }
+  }
+
+  /* Trailing pack information — that is how it is sold, not how much to use. */
+  var packHint = "";
+  var sm = out.name.match(SIZE_TAIL);
+  if(sm){
+    packHint = sm[1] + sm[2].toLowerCase() + (sm[3] ? " " + sm[3].toLowerCase() : "");
+    out.name = out.name.slice(0, sm.index).trim();
+    if(!out.unit && out.qty && /each/i.test(sm[3] || "")){
+      /* "2 salmon fillets 120g each" -> 240g */
+      out.qty = String(parseFloat(out.qty) * parseFloat(sm[1]));
+      out.unit = sm[2].toLowerCase();
+    }
+    changed = true;
+  } else {
+    var cm = out.name.match(COUNT_TAIL);
+    if(cm){
+      packHint = cm[1] + " " + cm[2].toLowerCase();
+      out.name = out.name.slice(0, cm.index).trim();
+      changed = true;
+    }
+  }
+
+  out.name = out.name.replace(/[\s,(]+$/, "").replace(/^\(+/, "").trim();
+  if(packHint) out.packHint = packHint;
+  out.repaired = changed;
+  return out;
+}
+
+/* One pass over everything already saved. */
+function repairAllIngredients(){
+  var fixed = 0, packs = 0;
+  S.recipes.forEach(function(r){
+    (r.ingredients || []).forEach(function(g, i){
+      if(typeof g !== "object" || g.checked) return;
+      var out = repairIngredient(g);
+      if(out.packHint && !packFor(out.name)){ setPack(out.name, out.packHint); packs++; }
+      delete out.packHint;
+      if(out.repaired){ fixed++; }
+      out.checked = true;
+      delete out.repaired;
+      r.ingredients[i] = out;
+    });
+  });
+  if(fixed || packs) save();
+  return {fixed:fixed, packs:packs};
+}
+
+/* ═══ SEASONINGS AND DEFAULT PACK SIZES ════════════════════
+   A teaspoon of paprika is not a shopping decision. Anything
+   measured in spoons, pinches or cloves goes to the cupboard
+   rather than the list, and only reaches the list when marked
+   low. Pack sizes for common UK items are seeded so the pack
+   arithmetic has something to work with from the start.
+   ═════════════════════════════════════════════════════════ */
+var SMALL_UNITS = ["tsp","tbsp","pinch","pinches","dash","splash","glug","knob",
+                   "sprig","sprigs","clove","cloves","drizzle","to taste",
+                   "to serve","to garnish","handful","handfuls"];
+function isSeasoning(g){
+  var u = String(g.unit || "").trim().toLowerCase();
+  if(SMALL_UNITS.indexOf(u) !== -1) return true;
+  /* A named seasoning with no real amount is the same thing. */
+  var n = String(g.name || "");
+  var named = /\b(salt|black pepper|white pepper|paprika|cumin|oregano|thyme|basil|chilli flakes|cinnamon|turmeric|nutmeg|bay leaves?|cooking spray|stock cube)\b/i.test(n);
+  return named && !/^\d{2,}$/.test(String(g.qty || ""));
+}
+
+/* Seed the cupboard so a seasoning is visible and can be marked low. */
+function ensureCupboard(name){
+  var key = normalise(name);
+  if(S.cupboard.some(function(c){ return normalise(c.name) === key; })) return false;
+  S.cupboard.push({id:uid(), name:name, aisle:aisleFor(name), stock:"", keep:"", unconfirmed:true});
+  return true;
+}
+
+var DEFAULT_PACKS = [
+  [/\bbanana/, "hand of 5"], [/\begg\b|\beggs\b/, "box of 6"],
+  [/\bsausage/, "pack of 8"], [/\bbacon\b/, "250g pack"],
+  [/\bchicken breast/, "pack of 4"], [/\bchicken thigh/, "pack of 6"],
+  [/\bmince\b/, "500g pack"], [/\bstock cube/, "box of 10"],
+  [/\bgarlic\b(?!.*bread)/, "bulb"], [/\bspring onion/, "bunch of 8"],
+  [/\bgravy granule/, "200g pot"], [/\bmilk\b/, "2 litre bottle"],
+  [/\bdouble cream|single cream|soured cream/, "300ml pot"],
+  [/\bcreme fraiche|greek yogurt|natural yogurt/, "500g pot"],
+  [/\bcheddar|mature cheese/, "400g block"], [/\bbutter\b/, "250g block"],
+  [/\bpotato(?!.*sweet)/, "2kg bag"], [/\bsweet potato/, "1kg bag"],
+  [/\bonion\b/, "bag of 4"], [/\bcarrot/, "1kg bag"],
+  [/\bbroccoli|cauliflower/, "head"], [/\bgreen bean|mangetout|sugar snap/, "220g pack"],
+  [/\bmushroom/, "250g punnet"], [/\bpepper\b(?!.*black|.*white)/, "pack of 3"],
+  [/\btomato(?!.*tin|.*chopped)/, "6 pack"], [/\bcherry tomato/, "300g punnet"],
+  [/\blemon\b|\blime\b/, "pack of 4"], [/\blettuce|romaine/, "pack of 2"],
+  [/\bpasta\b|\bspaghetti\b|\bpenne\b/, "500g pack"], [/\brice\b/, "1kg bag"],
+  [/\bflour\b/, "1.5kg bag"], [/\bsugar\b/, "1kg bag"],
+  [/\bchopped tomato|tinned tomato/, "400g tin"], [/\bbaked bean|chickpea|kidney bean/, "400g tin"],
+  [/\bbread\b|\bloaf\b/, "800g loaf"], [/\bcrisp/, "6 pack"],
+  [/\bcoke|pepsi|tango|lemonade|fanta/, "2 litre bottle"],
+  [/\bhash brown/, "pack of 10"], [/\bham\b/, "240g pack"]
+];
+function seedPacks(){
+  var n = 0;
+  var names = {};
+  S.recipes.forEach(function(r){
+    (r.ingredients || []).forEach(function(g){
+      if(typeof g === "object" && g.name) names[normalise(g.name)] = g.name;
+    });
+  });
+  S.cupboard.forEach(function(c){ names[normalise(c.name)] = c.name; });
+  S.shop.forEach(function(i){ names[normalise(i.name)] = i.name; });
+  Object.keys(names).forEach(function(key){
+    if(packFor(names[key])) return;                 // never override yours
+    for(var i = 0; i < DEFAULT_PACKS.length; i++){
+      if(DEFAULT_PACKS[i][0].test(key)){ setPack(names[key], DEFAULT_PACKS[i][1]); n++; return; }
+    }
+  });
+  if(n) save();
+  return n;
 }
 
 </script>
@@ -4110,6 +4288,12 @@ function wipeAll(){
     requestPersistence();
     fixDuplicateColours();
     tidyIngredients();
+    var rep = repairAllIngredients();
+    var seeded = seedPacks();
+    if(rep.fixed || seeded){
+      rebuildShopFromPlan(); save();
+      toast("Tidied " + rep.fixed + " quantities, set " + seeded + " pack sizes");
+    }
     renderBackupNudge();
     migratePhotosToIDB().then(function(n){
       if(n){ renderRecipes(); toast(n + " photos moved to roomier storage"); }
