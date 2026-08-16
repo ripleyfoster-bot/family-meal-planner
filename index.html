@@ -392,6 +392,7 @@ body.dark .qbox{color:var(--ink);}
     <div class="chip on" onclick="setShopView('list',this)">List</div>
     <div class="chip" onclick="setShopView('cupboard',this)">Store cupboard</div>
     <div class="chip" onclick="setShopView('layout',this)">Shop layout</div>
+    <div class="chip" onclick="setShopView('receipt',this)">Receipt</div>
     <div class="chip" onclick="setShopView('prices',this)">Prices</div>
     <div class="chip" onclick="setShopView('foods',this)">Foods</div>
   </div>
@@ -444,6 +445,11 @@ body.dark .qbox{color:var(--ink);}
       <button class="btn sm" style="flex:0 0 auto" onclick="addAisle()">Add</button>
     </div>
     <button class="btn wide danger sm" style="margin-top:14px" onclick="delStore()">Remove this shop</button>
+  </div>
+
+  <div id="shop-receipt-view" hidden>
+    <div class="sec-hd">Scan a till receipt</div>
+    <div id="receipt-body"></div>
   </div>
 
   <div id="shop-prices-view" hidden>
@@ -575,7 +581,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "31";
+var VERSION = "32";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -863,6 +869,7 @@ function blankState(){
     stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
     prices:{}, spend:[], aliases:{}, foods:{}, lastExport:null, planView:"day",
     deviceId:"", deviceName:"", gen:0, savedAt:0, savedBy:"", exportLog:[],
+    plu:{},
     dayIdx:0, weekOffset:0, apiKey:"",
     theme:"pine", mode:"auto"
   };
@@ -1404,12 +1411,14 @@ function setShopView(v, el){
   document.getElementById("shop-layout-view").hidden = (v !== "layout");
   document.getElementById("shop-prices-view").hidden = (v !== "prices");
   document.getElementById("shop-foods-view").hidden = (v !== "foods");
+  document.getElementById("shop-receipt-view").hidden = (v !== "receipt");
   renderShop();
 }
 function renderShop(){
   if(shopView === "cupboard"){ renderCupboard(); return; }
   if(shopView === "layout"){ renderLayout(); return; }
   if(shopView === "prices"){ renderPrices(); return; }
+  if(shopView === "receipt"){ renderReceipt(); return; }
   if(shopView === "foods"){ renderFoods(); return; }
   renderAislePicker();
   primePrices();
@@ -3129,6 +3138,7 @@ function saveCupboardItem(id){
   var chosenStock = document.querySelector("#cup-stock .chip.on");
   c.stock = chosenStock ? chosenStock.getAttribute("data-s") : (c.stock || "in");
   setPack(name, document.getElementById("cup-pack").value);
+  if(S.foods[normalise(name)]) S.foods[normalise(name)].packFixed = true;
   learnAisle(name, aisle);
   syncRestock(c);
   editingCup = null;
@@ -3169,6 +3179,7 @@ function saveShopItem(id){
   var p = parseIngredient((document.getElementById("shp-qty").value.trim() + " " + name).trim());
   i.name = p.name || name; i.qty = p.qty; i.unit = p.unit; i.aisle = aisle;
   setPack(i.name, document.getElementById("shp-pack").value);
+  if(S.foods[normalise(name)]) S.foods[normalise(name)].packFixed = true;
   learnAisle(i.name, aisle);
   editingShop = null;
   refreshFoodOptions(); save(); renderShop();
@@ -4113,6 +4124,287 @@ function importWarning(cmp){
   lines.push("");
   lines.push("Importing REPLACES everything on this device. Continue?");
   return lines.join("\n");
+}
+
+/* ═══ RECEIPT SCANNING ═════════════════════════════════════
+   Built against a real Aldi receipt. The format is:
+
+       2 x
+             2.29
+       619353 FRUIT STICKS        4.58 B
+       371336 BRKFST HASH BRWNS   1.49 A
+
+   A "N x" line and a unit price apply to the NEXT item only.
+   Every item carries a six-digit PLU, an abbreviated name with
+   the pack size often inside it, the LINE TOTAL, and a VAT code
+   (A = zero-rated food, B = standard rated).
+
+   The PLU is the useful part: it never changes, so once a code
+   is matched to one of your foods the match is permanent and
+   the abbreviations stop mattering.
+   ═════════════════════════════════════════════════════════ */
+var rcPages = [], rcResult = null, rcBusy = false;
+
+function rcAddPage(ev){
+  var files = [].slice.call(ev.target.files || []);
+  ev.target.value = "";
+  if(!files.length) return;
+  toast("Shrinking " + files.length + (files.length === 1 ? " photo…" : " photos…"));
+  Promise.all(files.map(function(f){ return downscale(f, 1600, 0.72); }))
+    .then(function(urls){ urls.forEach(function(u){ rcPages.push(u); }); renderReceipt(); })
+    .catch(function(){ toast("Couldn't read that image"); });
+}
+function rcRemovePage(i){ rcPages.splice(i, 1); renderReceipt(); }
+function rcReset(){ rcPages = []; rcResult = null; renderReceipt(); }
+
+/* Pack size is usually sitting inside the abbreviated name. */
+function packFromReceipt(text){
+  var m = String(text).match(/\b(\d+(?:\.\d+)?)\s*(kg|g|ml|l|pk|pt|cl)\b/i);
+  if(!m) return "";
+  var n = m[1], u = m[2].toLowerCase();
+  if(u === "pk") return "pack of " + n;
+  if(u === "pt") return n + " pint";
+  if(u === "cl") return (parseFloat(n) * 10) + "ml";
+  return n + u;
+}
+function storeKeyNow(){
+  var s = currentStore();
+  return s ? s.id : "default";
+}
+/* A PLU seen before goes straight to the food it meant last time. */
+function pluLookup(plu){
+  var sid = storeKeyNow();
+  return (S.plu && S.plu[sid] && S.plu[sid][plu]) || "";
+}
+function pluRemember(plu, foodName){
+  if(!plu || !foodName) return;
+  var sid = storeKeyNow();
+  if(!S.plu) S.plu = {};
+  if(!S.plu[sid]) S.plu[sid] = {};
+  S.plu[sid][plu] = normalise(foodName);
+}
+
+async function rcScan(){
+  if(!rcPages.length){ toast("Add a photo of the receipt first"); return; }
+  if(!haveKey()){ toast("Add your Claude API key in Settings first"); goTab("settings"); return; }
+  rcBusy = true; renderReceipt();
+
+  /* Give it your own vocabulary so it maps to names you already use. */
+  var known = Object.keys(S.foods || {}).slice(0, 400).join(", ");
+  var content = rcPages.map(function(u){
+    return {type:"image", source:{type:"base64", media_type:"image/jpeg", data:u.split(",")[1]}};
+  });
+  content.push({type:"text", text:"Read this supermarket receipt."});
+
+  try{
+    var out = await callClaude(
+      "Read every purchased line from this UK supermarket receipt. Photos may overlap — never list the same "
+      + "line twice.\n\n"
+      + "LAYOUT: a line reading \"N x\" followed by a unit price applies ONLY to the next item line. "
+      + "An item line is: PLU code, abbreviated name, LINE TOTAL, then a VAT letter (A or B). "
+      + "The number beside the item is the total for that line, not the unit price.\n\n"
+      + "Return valid JSON only, nothing else:\n"
+      + '{"store":"","date":"YYYY-MM-DD","total":0,"items":[{"plu":"","text":"","qty":1,'
+      + '"unit_price":0,"line_total":0,"vat":"A","guess":""}]}\n\n'
+      + '"text" is exactly as printed. "guess" is the plain shopping name a UK cook would use — expand the '
+      + 'abbreviations ("BRKFST HASH BRWNS" is hash browns, "TOM PUREE DBL CONC" is tomato puree, '
+      + '"S/S EASY PEELERS" is easy peeler oranges, "GRLC BAGUETTE TWIN" is garlic baguette). '
+      + 'Where one of these names the household already uses fits, use it verbatim: ' + known + "\n"
+      + "Skip totals, VAT summaries, card details and thank-you text. Items only.",
+      content, 8000, {search:false});
+
+    rcResult = out;
+    (rcResult.items || []).forEach(function(it){
+      it.plu = String(it.plu || "").trim();
+      it.match = pluLookup(it.plu) || bestFoodMatch(it.guess || it.text);
+      it.pack = packFromReceipt(it.text);
+      it.keep = true;
+    });
+    toast((rcResult.items || []).length + " lines read");
+  }catch(e){
+    toast(e.message === "bad-key" ? "That API key was rejected"
+        : "Couldn't read the receipt — " + String(e.message).slice(0, 70));
+  }
+  rcBusy = false; renderReceipt();
+}
+
+/* Match against the vocabulary already in use before inventing a new food. */
+function bestFoodMatch(text){
+  var n = normalise(text);
+  if(!n) return "";
+  if(S.foods[n]) return n;
+  var words = n.split(" ").filter(Boolean);
+  var best = "", score = 0;
+  Object.keys(S.foods || {}).forEach(function(k){
+    var kw = k.split(" ").filter(Boolean);
+    var hits = kw.filter(function(w){ return words.indexOf(w) !== -1; }).length;
+    if(!hits) return;
+    var s = hits / Math.max(kw.length, words.length);
+    if(s > score){ score = s; best = k; }
+  });
+  return score >= 0.5 ? best : "";
+}
+
+function rcApply(){
+  if(!rcResult || !(rcResult.items || []).length) return;
+  var sid = storeKeyNow();
+  var date = rcResult.date || new Date().toISOString().slice(0,10);
+  var kept = rcResult.items.filter(function(i){ return i.keep && i.line_total != null; });
+  var prices = 0, packs = 0, linked = 0;
+
+  kept.forEach(function(it){
+    var name = (it.match || it.guess || it.text || "").trim();
+    if(!name) return;
+    var key = normalise(name);
+    var qty = Number(it.qty) || 1;
+    var each = it.unit_price != null && Number(it.unit_price) > 0
+             ? Number(it.unit_price)
+             : Number(it.line_total) / qty;
+    if(!(each > 0)) return;
+
+    learnFood(name, {});
+    /* A receipt is the best evidence there is of how something is sold,
+       so it overrides a seeded or malformed guess — but never a pack size
+       you set yourself. */
+    var existing = packFor(name);
+    var existingOk = !!parseAmount(existing);
+    var mine = S.foods[key] && S.foods[key].packFixed;
+    if(it.pack && (!existing || (!mine && (!existingOk || existing !== it.pack)))){
+      setPack(name, it.pack); packs++;
+    }
+    /* A pack size makes a unit price possible, which is the number that
+       survives shrinkflation — 4.69 means nothing, £4.69/kg means something. */
+    var packAmt = parseAmount(packFor(name));
+    var opts = {src:"receipt", promo:false};
+    if(packAmt && packAmt.n && (packAmt.unit === "g" || packAmt.unit === "ml")){
+      opts.unitPrice = Math.round((each / packAmt.n) * 1000 * 100) / 100;
+      opts.unit = packAmt.unit === "g" ? "kg" : "l";
+    }
+    recordPrice(sid, key, Math.round(each * 100) / 100, opts);
+    prices++;
+
+    if(it.plu){ pluRemember(it.plu, name); linked++; }
+    if(!S.aliases[sid]) S.aliases[sid] = {};
+    if(it.text) S.aliases[sid][String(it.text).toUpperCase()] = key;
+
+    /* Anything on the list that this covers is now bought. */
+    S.shop.forEach(function(s){
+      if(sameItem(normalise(s.name), key) && s.status !== "bought"){
+        s.status = "bought";
+        s.price = Math.round(each * qty * 100) / 100;
+        s.priceGuess = false;
+      }
+    });
+  });
+
+  var total = Number(rcResult.total) || kept.reduce(function(a, i){ return a + (Number(i.line_total) || 0); }, 0);
+  S.spend.push({id:uid(), date:date, storeId:sid,
+    storeName:(currentStore() || {}).name || rcResult.store || "Shop",
+    total:Math.round(total * 100) / 100, n:kept.length,
+    items:kept.map(function(i){
+      return {name:(i.match || i.guess || i.text), price:Number(i.line_total) || null};
+    }), src:"receipt"});
+  if(S.spend.length > 120) S.spend.splice(0, S.spend.length - 120);
+
+  save();
+  rcReset();
+  toast(prices + " prices saved · " + linked + " codes learned · " + packs + " pack sizes");
+}
+
+function renderReceipt(){
+  var el = document.getElementById("receipt-body");
+  if(!el) return;
+  var h = "";
+
+  if(!rcResult){
+    h += '<div class="card"><div class="hint">Photograph the whole receipt — several shots is fine, '
+      + 'and overlapping is fine. Prices, pack sizes and the shop\'s own product codes are all read off it.</div>'
+      + '<input type="file" id="rc-in" accept="image/*" multiple hidden onchange="rcAddPage(event)">'
+      + '<button class="btn wide ghost" style="margin-top:11px" onclick="document.getElementById(\'rc-in\').click()">'
+      + (rcPages.length ? "Add another photo" : "Photograph the receipt") + '</button>';
+    if(rcPages.length){
+      h += '<div class="chips" style="margin-top:11px">'
+        + rcPages.map(function(u, i){
+            return '<div class="chip">Page ' + (i+1)
+              + ' <span style="margin-left:6px;opacity:.6" onclick="event.stopPropagation();rcRemovePage(' + i + ')">×</span></div>';
+          }).join("") + '</div>'
+        + '<button class="btn wide" style="margin-top:11px" onclick="rcScan()"' + (rcBusy ? " disabled" : "") + '>'
+        + (rcBusy ? '<span class="pulse">Reading the receipt…</span>' : 'Read ' + rcPages.length
+           + (rcPages.length === 1 ? ' photo' : ' photos')) + '</button>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+    return;
+  }
+
+  var items = rcResult.items || [];
+  var sum = items.filter(function(i){ return i.keep; })
+                 .reduce(function(a, i){ return a + (Number(i.line_total) || 0); }, 0);
+  var printed = Number(rcResult.total) || 0;
+  var off = printed ? Math.abs(sum - printed) : 0;
+
+  h += '<div class="card">'
+    + '<div style="font-weight:600">' + esc(rcResult.store || "Receipt") + '</div>'
+    + '<div class="hint">' + esc(rcResult.date || "") + ' · ' + items.length + ' lines</div>'
+    + '<div class="rmeta"><span>read ' + money(sum) + '</span>'
+    + (printed ? '<span>printed ' + money(printed) + '</span>' : "") + '</div>'
+    + (printed && off > 0.02
+        ? '<div class="banner" style="margin-top:10px">These differ by ' + money(off)
+          + '. A line has been misread or missed — check before saving.</div>'
+        : printed ? '<div class="cupboard-flag" style="margin-top:9px;display:inline-block">Totals agree</div>' : "")
+    + '</div>';
+
+  var unmatched = items.filter(function(i){ return i.keep && !i.match; }).length;
+  if(unmatched){
+    h += '<div class="hint" style="margin:11px 0">' + unmatched + ' of these are not in your food list yet — '
+      + 'they will be added as new foods. Tap any to correct the name first.</div>';
+  }
+
+  h += '<div class="card flush">';
+  items.forEach(function(it, i){
+    var each = it.unit_price != null && Number(it.unit_price) > 0
+             ? Number(it.unit_price) : (Number(it.line_total) || 0) / (Number(it.qty) || 1);
+    h += '<div class="shop-row' + (it.keep ? "" : " have") + '">'
+      + '<div class="chk' + (it.keep ? " done" : "") + '" onclick="rcToggle(' + i + ')">'
+      + (it.keep ? "✓" : "") + '</div>'
+      + '<div class="qbox">' + money(Number(it.line_total) || 0) + '</div>'
+      + '<div class="grow" onclick="rcEdit(' + i + ')" style="cursor:pointer">'
+      + '<div class="nm">' + esc(it.match || it.guess || it.text) + '</div>'
+      + '<div class="mt">' + esc(it.text)
+      + ((Number(it.qty) || 1) > 1 ? ' · ' + it.qty + ' × ' + money(each) : "")
+      + (it.pack ? ' · ' + esc(it.pack) : "")
+      + (it.match ? "" : ' · <b>new</b>') + '</div></div>'
+      + '<span class="chev">›</span></div>'
+      + (rcEditing === i ? rcEditorHtml(it, i) : "");
+  });
+  h += '</div>';
+
+  h += '<div class="row" style="margin-top:13px">'
+    + '<button class="btn ghost" onclick="rcReset()">Start again</button>'
+    + '<button class="btn" onclick="rcApply()">Save these prices</button></div>';
+  el.innerHTML = h;
+}
+var rcEditing = null;
+function rcToggle(i){ rcResult.items[i].keep = !rcResult.items[i].keep; renderReceipt(); }
+function rcEdit(i){ rcEditing = rcEditing === i ? null : i; renderReceipt(); }
+function rcEditorHtml(it, i){
+  return '<div class="card" style="margin:6px 13px 10px;background:var(--accent-soft)">'
+    + '<label class="fld">What this is</label>'
+    + '<input type="text" id="rc-name" list="food-options" value="' + esc(it.match || it.guess || "") + '">'
+    + '<label class="fld">Sold as</label>'
+    + '<input type="text" id="rc-pack" value="' + esc(it.pack || "") + '" placeholder="500g pot">'
+    + '<div class="hint" style="margin-top:7px">Printed as <b>' + esc(it.text) + '</b>'
+    + (it.plu ? ' · code ' + esc(it.plu) + ' — remembered for next time' : "") + '</div>'
+    + '<div class="row" style="margin-top:11px">'
+    + '<button class="btn ghost sm" onclick="rcEdit(' + i + ')">Cancel</button>'
+    + '<button class="btn sm" onclick="rcSaveLine(' + i + ')">Save</button></div></div>';
+}
+function rcSaveLine(i){
+  var it = rcResult.items[i];
+  it.match = document.getElementById("rc-name").value.trim();
+  it.pack = document.getElementById("rc-pack").value.trim();
+  rcEditing = null;
+  renderReceipt();
 }
 
 </script>
