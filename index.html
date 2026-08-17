@@ -393,6 +393,7 @@ body.dark .qbox{color:var(--ink);}
     <div class="chip" onclick="setShopView('cupboard',this)">Store cupboard</div>
     <div class="chip" onclick="setShopView('layout',this)">Shop layout</div>
     <div class="chip" onclick="setShopView('receipt',this)">Receipt</div>
+    <div class="chip" onclick="setShopView('costs',this)">Meal costs</div>
     <div class="chip" onclick="setShopView('prices',this)">Prices</div>
     <div class="chip" onclick="setShopView('foods',this)">Foods</div>
   </div>
@@ -445,6 +446,13 @@ body.dark .qbox{color:var(--ink);}
       <button class="btn sm" style="flex:0 0 auto" onclick="addAisle()">Add</button>
     </div>
     <button class="btn wide danger sm" style="margin-top:14px" onclick="delStore()">Remove this shop</button>
+  </div>
+
+  <div id="shop-costs-view" hidden>
+    <div class="sec-hd">Cost per portion — dearest first</div>
+    <div class="hint" style="margin-bottom:11px">Worked out from prices logged at the current shop. Only recipes
+      with at least half their ingredients priced are shown.</div>
+    <div class="card flush" id="cost-body"></div>
   </div>
 
   <div id="shop-receipt-view" hidden>
@@ -581,7 +589,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "33";
+var VERSION = "34";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1163,6 +1171,7 @@ function slotBody(day, slot, cell, eating){
     if(meta.length) h += '<div class="rmeta">' + meta.map(function(m){ return '<span>' + esc(m) + '</span>'; }).join("") + '</div>';
     if(it.looks) h += '<div class="sy" style="margin-top:8px"><b>On the plate:</b> ' + esc(it.looks) + '</div>';
     h += portionControlHtml(it, day, slot);
+    h += costChipHtml(dishCost(it, day, slot), dishPortions(it, day, slot));
     if(it.steps && it.steps.length){
       h += '<div class="sec-hd" style="margin-top:12px;margin-bottom:4px">Method</div>'
          + it.steps.map(function(s, i){
@@ -1180,6 +1189,15 @@ function slotBody(day, slot, cell, eating){
             : '<button class="mini" onclick="event.stopPropagation();markStd(\'' + esc(slot) + '\',\'' + esc(it.title) + '\',\'' + esc(day) + '\')">☆ Make regular</button>')
        + '</div></div>';
   });
+
+  if(items.length > 1){
+    var mc = mealCost(cell, day, slot);
+    var lbl = costLabel(mc, eating.length);
+    if(lbl){
+      h += '<div class="card" style="margin-top:11px;background:var(--accent-soft)">'
+        + '<b>Whole meal:</b> ' + esc(lbl) + '</div>';
+    }
+  }
 
   /* Add another course, or a first one. */
   if(picking){
@@ -1413,6 +1431,7 @@ function setShopView(v, el){
   document.getElementById("shop-prices-view").hidden = (v !== "prices");
   document.getElementById("shop-foods-view").hidden = (v !== "foods");
   document.getElementById("shop-receipt-view").hidden = (v !== "receipt");
+  document.getElementById("shop-costs-view").hidden = (v !== "costs");
   renderShop();
 }
 function renderShop(){
@@ -1420,6 +1439,7 @@ function renderShop(){
   if(shopView === "layout"){ renderLayout(); return; }
   if(shopView === "prices"){ renderPrices(); return; }
   if(shopView === "receipt"){ renderReceipt(); return; }
+  if(shopView === "costs"){ renderCosts(); return; }
   if(shopView === "foods"){ renderFoods(); return; }
   renderAislePicker();
   primePrices();
@@ -4526,6 +4546,150 @@ function portionControlHtml(it, day, slot){
           + esc(slot) + '\',\'' + it.itemId + '\',' + base + ')">full batch</button>'
         : "")
     + '</div>';
+}
+
+/* ═══ WHAT A MEAL COSTS ════════════════════════════════════
+   The price log knows what things cost, the recipes know what
+   goes in, and portion scaling knows how much. Joining them
+   gives the cost of the food actually used — a proportional
+   figure, not what you paid at the till, because 375g of mince
+   out of a 1kg pack costs 375g's worth even though you bought
+   the kilo.
+
+   Every figure says how complete it is. A meal costed from four
+   of eleven ingredients is worse than useless if it looks
+   authoritative.
+   ═════════════════════════════════════════════════════════ */
+/* Recipes count onions; shops sell them by the kilo. Without a bridge,
+   four carrots got costed as four 1kg bags. These are rough typical
+   weights — good enough to cost with, and better than a 4x overstatement.
+   Anything not listed returns no price rather than a wrong one. */
+var ITEM_WEIGHTS = {
+  onion:150, "red onion":150, shallot:40, "spring onion":15, leek:150,
+  carrot:80, parsnip:130, potato:200, "sweet potato":250, "baking potato":250,
+  tomato:90, "cherry tomato":10, pepper:160, courgette:200, aubergine:300,
+  cucumber:300, celery:40, "celery stick":40, lettuce:300, "romaine lettuce":300,
+  broccoli:350, cauliflower:600, cabbage:800, "garlic clove":5, garlic:50,
+  lemon:100, lime:70, orange:180, apple:150, banana:120, pear:170, avocado:200,
+  egg:60, "chicken breast":175, "chicken thigh":90, "salmon fillet":130,
+  "pork chop":150, "lamb chop":100, sausage:57, rasher:25, mushroom:20
+};
+function typicalWeight(name){
+  var n = normalise(name);
+  if(ITEM_WEIGHTS[n]) return ITEM_WEIGHTS[n];
+  var keys = Object.keys(ITEM_WEIGHTS);
+  for(var i = 0; i < keys.length; i++){
+    if(mentions(n, keys[i])) return ITEM_WEIGHTS[keys[i]];
+  }
+  return 0;
+}
+function ingredientCost(g){
+  var name = (typeof g === "object") ? g.name : String(g);
+  var key = normalise(name);
+  if(!key) return null;
+  var rec = lastPrice(storeKeyNow(), key);
+  if(!rec || !(rec.p > 0)) return null;
+
+  var amt = parseAmount([(typeof g === "object" ? g.qty : ""), (typeof g === "object" ? g.unit : "")]
+              .filter(Boolean).join(" "));
+  var pack = parseAmount(packFor(name));
+
+  /* Best case: a unit price from a receipt, and an amount by weight. */
+  if(rec.up > 0 && amt && (amt.unit === "g" || amt.unit === "ml")){
+    return {cost:(amt.n * rec.up) / 1000, how:"unit price"};
+  }
+  /* Otherwise work out what fraction of a pack the recipe uses. */
+  if(amt && pack && pack.n && amt.unit === pack.unit){
+    return {cost:(amt.n / pack.n) * rec.p, how:"part pack"};
+  }
+  /* Counted item, pack sold by weight — convert using a typical weight. */
+  if(amt && amt.unit === "each" && pack && (pack.unit === "g" || pack.unit === "ml")){
+    var w = typicalWeight(name);
+    if(!w) return null;
+    var grams = amt.n * w;
+    if(rec.up > 0) return {cost:(grams * rec.up) / 1000, how:"by weight"};
+    if(pack.n) return {cost:(grams / pack.n) * rec.p, how:"by weight"};
+    return null;
+  }
+  /* A countable thing genuinely priced per item. */
+  if(amt && amt.unit === "each" && !pack){
+    return {cost:amt.n * rec.p, how:"per item"};
+  }
+  /* No amount recorded — assume one of whatever it is. */
+  if(!amt) return {cost:rec.p, how:"assumed one"};
+  return null;
+}
+function costList(list){
+  var total = 0, priced = 0, missing = [];
+  (list || []).forEach(function(g){
+    var name = (typeof g === "object") ? g.name : String(g);
+    if(!normalise(name)) return;
+    var c = ingredientCost(g);
+    if(c){ total += c.cost; priced++; }
+    else missing.push(name);
+  });
+  var n = priced + missing.length;
+  return {total:total, priced:priced, of:n, missing:missing,
+          coverage:n ? priced / n : 0};
+}
+function dishCost(it, day, slot){
+  return costList(dishIngredients(it, day, slot));
+}
+function mealCost(cell, day, slot){
+  var all = [];
+  cellItems(cell).forEach(function(it){ all = all.concat(dishIngredients(it, day, slot)); });
+  return costList(all);
+}
+/* Anything under two thirds priced is a guess, and says so. */
+function costLabel(c, heads){
+  if(!c.of) return "";
+  if(c.coverage < 0.34) return "not enough prices yet";
+  var per = heads > 0 ? c.total / heads : 0;
+  var txt = money(c.total) + (heads > 1 ? " · " + money(per) + " a head" : "");
+  if(c.coverage < 0.999){
+    txt += " · from " + c.priced + " of " + c.of + " ingredients";
+  }
+  return txt;
+}
+function costChipHtml(c, heads){
+  var lbl = costLabel(c, heads);
+  if(!lbl) return "";
+  var weak = c.coverage < 0.67;
+  return '<div class="rmeta" style="margin-top:7px">'
+    + '<span style="' + (weak ? "" : "background:var(--ok);color:var(--ok-ink);") + '">'
+    + (weak ? "roughly " : "") + esc(lbl) + '</span></div>';
+}
+
+/* Which of your recipes are quietly expensive, per portion. */
+function recipeCostTable(){
+  var rows = [];
+  S.recipes.forEach(function(r){
+    var c = costList(r.ingredients || []);
+    if(c.coverage < 0.5 || !c.total) return;
+    var serves = Number(r.serves) || 1;
+    rows.push({title:r.title, per:c.total / serves, total:c.total,
+               serves:serves, coverage:c.coverage, id:r.id});
+  });
+  rows.sort(function(a, b){ return b.per - a.per; });
+  return rows;
+}
+function renderCosts(){
+  var el = document.getElementById("cost-body");
+  if(!el) return;
+  var rows = recipeCostTable();
+  if(!rows.length){
+    el.innerHTML = '<div class="empty">No costings yet.<br><br>'
+      + 'Scan a receipt on the Receipt tab — once prices are logged, the cost of each recipe appears here.</div>';
+    return;
+  }
+  el.innerHTML = rows.map(function(x){
+    return '<div class="shop-row" onclick="goTab(\'recipes\');openRecipe(\'' + x.id + '\')" style="cursor:pointer">'
+      + '<div class="qbox' + (x.coverage > 0.85 ? " pack" : "") + '">' + money(x.per) + '</div>'
+      + '<div class="grow"><div class="nm">' + esc(x.title) + '</div>'
+      + '<div class="mt">' + money(x.total) + ' for ' + x.serves
+      + (x.coverage < 0.999 ? ' · ' + Math.round(x.coverage * 100) + '% priced' : "") + '</div></div>'
+      + '<span class="chev">›</span></div>';
+  }).join("");
 }
 
 </script>
