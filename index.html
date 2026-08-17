@@ -581,7 +581,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "32";
+var VERSION = "33";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1162,6 +1162,7 @@ function slotBody(day, slot, cell, eating){
     if(it.cookMins) meta.push(fmtMins(it.cookMins) + " cook");
     if(meta.length) h += '<div class="rmeta">' + meta.map(function(m){ return '<span>' + esc(m) + '</span>'; }).join("") + '</div>';
     if(it.looks) h += '<div class="sy" style="margin-top:8px"><b>On the plate:</b> ' + esc(it.looks) + '</div>';
+    h += portionControlHtml(it, day, slot);
     if(it.steps && it.steps.length){
       h += '<div class="sec-hd" style="margin-top:12px;margin-bottom:4px">Method</div>'
          + it.steps.map(function(s, i){
@@ -3430,8 +3431,8 @@ function weeklyDemand(){
     Object.keys(cells).forEach(function(slot){
       var c = cells[slot]; if(!c) return;
       var list = [];
-      liveItems(c).forEach(function(lv){
-        list = list.concat(lv.buy || [], lv.pantry || []);
+      cellItems(c).forEach(function(it){
+        list = list.concat(dishIngredients(it, day, slot));
       });
       list.forEach(function(g){
         var p = (typeof g === "object") ? g : parseIngredient(g);
@@ -3551,7 +3552,9 @@ function rebuildShopFromPlan(){
       cellItems(cell).forEach(function(it){
         var lv = liveItem(it);
         if(!lv){ it.addedIds = []; return; }
-        it.addedIds = addIngredients((lv.buy || []).concat(lv.pantry || []), lv.title);
+        /* Scaled to the number actually being cooked for, not the
+           number the recipe happens to be written for. */
+        it.addedIds = addIngredients(dishIngredients(it, day, slot), lv.title);
       });
     });
   });
@@ -4405,6 +4408,124 @@ function rcSaveLine(i){
   it.pack = document.getElementById("rc-pack").value.trim();
   rcEditing = null;
   renderReceipt();
+}
+
+/* ═══ PORTION SCALING ══════════════════════════════════════
+   A recipe serving six, cooked for three, was still putting
+   six portions of shopping on the list every week. Each planned
+   dish now carries how many it is being cooked for, and the
+   ingredients are scaled to that when the list is built.
+
+   Scaling is deliberately linear. It is wrong for baking and
+   for pan sizes, but it is right for buying, which is what the
+   list is for — and the method still says what the recipe said.
+   ═════════════════════════════════════════════════════════ */
+
+/* How many this dish is being cooked for. Defaults to the number
+   eating, but cooking the full batch for leftovers is a real choice. */
+function dishPortions(it, day, slot){
+  if(it && it.portions) return Number(it.portions);
+  var n = eatersFor(day, slot).length;
+  return n || 1;
+}
+function baseServes(it){
+  if(!it) return 1;
+  if(it.recipeId){
+    var r = S.recipes.find(function(x){ return x.id === it.recipeId; });
+    if(r && Number(r.serves)) return Number(r.serves);
+  }
+  return Number(it.serves) || 1;
+}
+function dishFactor(it, day, slot){
+  var base = baseServes(it);
+  if(!base) return 1;
+  var want = dishPortions(it, day, slot);
+  return want / base;
+}
+
+/* Countable things round up — you cannot buy two thirds of an onion.
+   Weights round to something a scale can actually show. */
+function scaleAmountText(qty, unit, factor){
+  var n = parseFloat(String(qty).replace(",", "."));
+  if(isNaN(n)) return {qty:qty, unit:unit};
+  var v = n * factor;
+  var u = String(unit || "").trim().toLowerCase();
+  if(!u || u === "x"){
+    return {qty:String(Math.max(1, Math.ceil(v - 0.001))), unit:unit};
+  }
+  if(u === "g" || u === "ml"){
+    v = v >= 100 ? Math.round(v / 5) * 5 : Math.round(v);
+  } else if(u === "kg" || u === "l"){
+    /* Under a kilo or a litre, grams and millilitres read better. */
+    if(v < 1){
+      var small = v * 1000;
+      small = small >= 100 ? Math.round(small / 5) * 5 : Math.round(small);
+      return {qty:String(small), unit:(u === "kg" ? "g" : "ml")};
+    }
+    v = Math.round(v * 100) / 100;
+  } else {
+    v = Math.round(v * 4) / 4;              // quarter spoons are usable
+    if(v < 0.25) v = 0.25;
+  }
+  return {qty:String(v), unit:unit};
+}
+function scaleIngredients(list, factor){
+  if(!factor || Math.abs(factor - 1) < 0.001) return (list || []).slice();
+  return (list || []).map(function(g){
+    var p = (typeof g === "object") ? g : parseIngredient(g);
+    var s = scaleAmountText(p.qty, p.unit, factor);
+    return {name:p.name, qty:s.qty, unit:s.unit, prep:p.prep || ""};
+  });
+}
+/* What this dish contributes to the shopping list, at the size being cooked. */
+function dishIngredients(it, day, slot){
+  var lv = liveItem(it);
+  if(!lv) return [];
+  var raw = (lv.buy || []).concat(lv.pantry || []);
+  return scaleIngredients(raw, dishFactor(it, day, slot));
+}
+function setDishPortions(day, slot, itemId, n){
+  var cell = ensureCell(day, slot);
+  var it = cellItems(cell).filter(function(x){ return x.itemId === itemId; })[0];
+  if(!it) return;
+  var v = Math.max(1, Math.min(50, Math.round(Number(n) || 1)));
+  it.portions = v;
+  rebuildShopFromPlan();
+  save(); renderPlan();
+}
+function resetDishPortions(day, slot, itemId){
+  var cell = ensureCell(day, slot);
+  var it = cellItems(cell).filter(function(x){ return x.itemId === itemId; })[0];
+  if(!it) return;
+  delete it.portions;
+  rebuildShopFromPlan();
+  save(); renderPlan();
+}
+/* The control shown under each planned dish. */
+function portionControlHtml(it, day, slot){
+  var base = baseServes(it);
+  var want = dishPortions(it, day, slot);
+  var eating = eatersFor(day, slot).length || 1;
+  var scaled = Math.abs(want - base) > 0.001;
+  return '<div class="rmeta" style="margin-top:9px;align-items:center">'
+    + '<span style="background:transparent;padding:0;color:var(--muted)">Cooking for</span>'
+    + '<button class="mini" onclick="event.stopPropagation();setDishPortions(\'' + esc(day) + '\',\'' + esc(slot)
+      + '\',\'' + it.itemId + '\',' + (want - 1) + ')">−</button>'
+    + '<span style="font-weight:600">' + want + '</span>'
+    + '<button class="mini" onclick="event.stopPropagation();setDishPortions(\'' + esc(day) + '\',\'' + esc(slot)
+      + '\',\'' + it.itemId + '\',' + (want + 1) + ')">+</button>'
+    + (scaled
+        ? '<span>recipe serves ' + base + ', scaled ' + (Math.round((want / base) * 100) / 100) + '×</span>'
+        : '<span>recipe serves ' + base + '</span>')
+    + (want !== eating
+        ? '<button class="mini mut" onclick="event.stopPropagation();setDishPortions(\'' + esc(day) + '\',\''
+          + esc(slot) + '\',\'' + it.itemId + '\',' + eating + ')">back to ' + eating + '</button>'
+        : "")
+    + (want !== base
+        ? '<button class="mini mut" onclick="event.stopPropagation();setDishPortions(\'' + esc(day) + '\',\''
+          + esc(slot) + '\',\'' + it.itemId + '\',' + base + ')">full batch</button>'
+        : "")
+    + '</div>';
 }
 
 </script>
