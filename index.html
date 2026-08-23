@@ -211,6 +211,7 @@ body.dark .rmeta span{color:var(--ink);}
 /* The quantity is what you read in the aisle, so it gets its own
    column between the tick and the name rather than trailing after it. */
 /* Day / Week switch, and the week overview itself. */
+.chip.mut{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:500;}
 .seg{display:flex;gap:4px;background:var(--line);padding:3px;border-radius:var(--r-md);margin-bottom:11px;}
 .seg-b{flex:1;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:600;
   padding:8px 0;border-radius:calc(var(--r-md) - 3px);cursor:pointer;font-family:inherit;}
@@ -589,7 +590,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "34";
+var VERSION = "35";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -890,6 +891,7 @@ var scanPages = [], scanResult = null;
 
 function save(){
   stampSave();
+  if(typeof forgetHaystacks === "function") forgetHaystacks();
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
   catch(e){ toast("Couldn't save — storage may be full"); }
 }
@@ -1885,19 +1887,27 @@ function renderRecipes(){
   if(!S.recipes.length){
     el.innerHTML = '<div class="empty">No saved recipes yet.</div>'; return;
   }
-  var html = "";
+  var hits = S.recipes.filter(recipeMatches);
+  var html = recipeSearchHtml(hits.length, S.recipes.length);
+  if(!hits.length){
+    el.innerHTML = html + '<div class="empty">Nothing matches.<br><br>'
+      + '<button class="btn ghost" onclick="clearRecipeSearch()">Clear the search</button></div>';
+    return;
+  }
   RECIPE_CATS.forEach(cat => {
-    var rs = S.recipes.filter(r => r.category === cat); if(!rs.length) return;
+    var rs = hits.filter(r => r.category === cat); if(!rs.length) return;
     html += '<div class="sec-hd">' + esc(cat) + '</div><div class="card flush">';
     rs.forEach(r => {
       migrateRecipe(r);
       var bits = ["serves " + r.serves, (r.ingredients||[]).length + " ingredients"];
       if(totalMins(r)) bits.push(fmtMins(totalMins(r)));
       if((r.steps||[]).length) bits.push((r.steps||[]).length + " steps");
+      var why = matchNote(r);
       html += '<div class="list-item" onclick="openRecipe(\'' + r.id + '\')">'
         + ((r.hasPhoto || r.photo) ? '<img data-photo="' + r.id + '" src="' + (r.photo || "") + '" style="width:42px;height:42px;object-fit:cover;border-radius:8px;flex-shrink:0;background:var(--accent-soft)">' : "")
         + '<div class="grow"><div class="nm">' + esc(r.title) + '</div>'
-        + '<div class="mt">' + esc(bits.join(" · ")) + '</div></div>'
+        + '<div class="mt">' + esc(bits.join(" · ")) + '</div>'
+        + (why ? '<div class="mt" style="color:var(--accent)">' + esc(why) + '</div>' : "") + '</div>'
         + '<span class="badge ' + catBadge(cat) + '">' + esc(cat.split(" ")[0]) + '</span>'
         + '<span class="chev">›</span></div>';
     });
@@ -2990,7 +3000,10 @@ async function testConnection(){
    work offline; anything else can be typed in directly.
    ═════════════════════════════════════════════════════════ */
 var SWAPS = [
-  {match:["pepper","bell pepper","red pepper","green pepper","yellow pepper"],
+  /* Seasoning peppers must never reach the produce swaps — "black pepper"
+     was being offered green beans and asparagus. */
+  {match:["bell pepper","red pepper","green pepper","yellow pepper","sweet pepper","mixed peppers"],
+   not:["black pepper","white pepper","peppercorn","cayenne pepper","peppercorns","ground pepper"],
    with:["green beans","asparagus","courgette","tenderstem broccoli","mangetout","sugar snap peas","celery"]},
   {match:["mushroom","chestnut mushroom","button mushroom"],
    with:["courgette","aubergine","celery","green beans","extra onion"]},
@@ -3023,6 +3036,7 @@ function swapsFor(name){
   if(!n) return [];
   var hits = [];
   SWAPS.forEach(function(row){
+    if(row.not && row.not.some(function(x){ return mentions(n, normalise(x)); })) return;
     if(row.match.some(function(m){ return mentions(n, normalise(m)); })){
       row.with.forEach(function(w){ if(hits.indexOf(w) === -1) hits.push(w); });
     }
@@ -3314,7 +3328,7 @@ var planPick = null;      // {rid, offset, dayIdx, slot}
 function openPlanPicker(rid){
   var r = S.recipes.find(function(x){ return x.id === rid; }); if(!r) return;
   var suits = recipeSlots(r);
-  planPick = {rid:rid, offset:S.weekOffset, dayIdx:S.dayIdx,
+  planPick = {rid:rid, offset:S.weekOffset, days:[S.dayIdx], done:null,
               slot:(S.slots.filter(function(s){ return suits.indexOf(s) !== -1; })[0] || S.slots[0] || "Dinner")};
   openRecipe(rid);
 }
@@ -3322,18 +3336,56 @@ function closePlanPicker(){ var rid = planPick && planPick.rid; planPick = null;
 function setPlanPart(key, val){
   if(!planPick) return;
   planPick[key] = (key === "slot") ? val : Number(val);
+  if(key === "offset") planPick.days = planPick.days.slice();
+  openRecipe(planPick.rid);
+}
+/* Days toggle rather than replace — Becky's breakfast is Monday,
+   Wednesday and Friday, not one day at a time, three times over. */
+function togglePlanDay(i){
+  if(!planPick) return;
+  var at = planPick.days.indexOf(i);
+  if(at === -1) planPick.days.push(i); else planPick.days.splice(at, 1);
+  openRecipe(planPick.rid);
+}
+function setPlanDays(which){
+  if(!planPick) return;
+  var days = orderedDays();
+  var wanted = [];
+  days.forEach(function(d, i){
+    var weekend = (d === "Saturday" || d === "Sunday");
+    if(which === "all") wanted.push(i);
+    else if(which === "weekdays" && !weekend) wanted.push(i);
+    else if(which === "weekend" && weekend) wanted.push(i);
+  });
+  planPick.days = (which === "none") ? [] : wanted;
   openRecipe(planPick.rid);
 }
 function planPickerHtml(r){
-  var saved = S.weekOffset, savedDay = S.dayIdx;
+  /* Already added — say where it went and offer to keep going. */
+  if(planPick.done){
+    var d = planPick.done;
+    return '<div class="card" style="background:var(--accent-soft)">'
+      + '<div style="font-weight:600;margin-bottom:5px">Added to ' + d.n
+      + (d.n === 1 ? " meal" : " meals") + '</div>'
+      + '<div class="hint">' + esc(d.where) + '</div>'
+      + (d.skipped ? '<div class="hint" style="margin-top:6px">' + d.skipped
+          + ' already had it, so nothing was duplicated.</div>' : "")
+      + '<div class="row" style="margin-top:12px">'
+      + '<button class="btn ghost" onclick="closePlanPicker()">Done</button>'
+      + '<button class="btn" onclick="openPlanPicker(\'' + r.id + '\')">Add to more days</button></div>'
+      + '<button class="btn wide ghost sm" style="margin-top:8px" onclick="goToPlannedDay()">Open the plan</button>'
+      + '</div>';
+  }
+
+  var saved = S.weekOffset;
   S.weekOffset = planPick.offset;
   var days = orderedDays();
   var dayHtml = days.map(function(d, i){
-    return '<div class="chip' + (i === planPick.dayIdx ? " on" : "") + '"'
-      + ' onclick="setPlanPart(\'dayIdx\',' + i + ')">'
+    return '<div class="chip' + (planPick.days.indexOf(i) !== -1 ? " on" : "") + '"'
+      + ' onclick="togglePlanDay(' + i + ')">'
       + esc(d.slice(0,3)) + ' ' + esc(fmtDate(dayDate(i))) + '</div>';
   }).join("");
-  S.weekOffset = saved; S.dayIdx = savedDay;
+  S.weekOffset = saved;
 
   var suits = recipeSlots(r);
   var slots = ALL_SLOTS.filter(function(s){
@@ -3343,10 +3395,11 @@ function planPickerHtml(r){
   var slotHtml = slots.map(function(s){
     var odd = TAGGABLE_SLOTS.indexOf(s) !== -1 && suits.indexOf(s) === -1;
     return '<div class="chip' + (s === planPick.slot ? " on" : "") + '"'
-      + ' onclick="setPlanPart(\'slot\',\'' + esc(s) + '\')">' + esc(s) + (odd ? " ⚠" : "") + '</div>';
+      + ' onclick="setPlanPart(\'slot\',\'' + esc(s) + '\')">' + esc(s) + (odd ? " \u26a0" : "") + '</div>';
   }).join("");
 
   var mismatch = TAGGABLE_SLOTS.indexOf(planPick.slot) !== -1 && suits.indexOf(planPick.slot) === -1;
+  var n = planPick.days.length;
 
   return '<div class="card" style="background:var(--accent-soft)">'
     + '<div style="font-weight:600;margin-bottom:8px">Put this on the plan</div>'
@@ -3355,25 +3408,62 @@ function planPickerHtml(r){
         return '<div class="chip' + (planPick.offset === w[0] ? " on" : "") + '"'
           + ' onclick="setPlanPart(\'offset\',' + w[0] + ')">' + w[1] + '</div>'; }).join("")
     + '</div>'
-    + '<label class="fld">Day</label><div class="chips">' + dayHtml + '</div>'
+    + '<label class="fld">Days <span style="font-weight:400;opacity:.6">tap as many as you like</span></label>'
+    + '<div class="chips">' + dayHtml + '</div>'
+    + '<div class="chips" style="margin-top:7px">'
+    + '<div class="chip mut" onclick="setPlanDays(\'weekdays\')">Weekdays</div>'
+    + '<div class="chip mut" onclick="setPlanDays(\'weekend\')">Weekend</div>'
+    + '<div class="chip mut" onclick="setPlanDays(\'all\')">Every day</div>'
+    + '<div class="chip mut" onclick="setPlanDays(\'none\')">Clear</div></div>'
     + '<label class="fld">Meal</label><div class="chips">' + slotHtml + '</div>'
     + (mismatch ? '<div class="banner" style="margin-top:10px">This is not tagged as a '
-        + esc(planPick.slot.toLowerCase()) + ' recipe. You can still plan it — nothing is stopping you.</div>' : "")
+        + esc(planPick.slot.toLowerCase()) + ' recipe. You can still plan it.</div>' : "")
     + '<div class="row" style="margin-top:12px">'
     + '<button class="btn ghost" onclick="closePlanPicker()">Cancel</button>'
-    + '<button class="btn" onclick="confirmPlanRecipe()">Add to plan</button></div></div>';
+    + '<button class="btn"' + (n ? "" : " disabled")
+    + ' onclick="confirmPlanRecipe()">Add to ' + (n || "no") + (n === 1 ? " day" : " days") + '</button></div></div>';
+}
+function goToPlannedDay(){
+  var d = planPick && planPick.done;
+  planPick = null;
+  if(d){ S.weekOffset = d.offset; S.dayIdx = d.firstDay; save(); }
+  goTab("plan");
 }
 function confirmPlanRecipe(){
-  if(!planPick) return;
+  if(!planPick || !planPick.days.length) return;
   var p = planPick;
+  var saved = S.weekOffset;
   S.weekOffset = p.offset;
-  S.dayIdx = p.dayIdx;
-  var day = orderedDays()[p.dayIdx];
-  planPick = null;
-  chooseSaved(day, p.slot, p.rid);
-  openSlots.add(day + "::" + p.slot);
-  goTab("plan");
-  toast("Planned for " + day + " " + p.slot.toLowerCase());
+  var days = orderedDays();
+  var added = [], skipped = 0;
+
+  p.days.slice().sort(function(a, b){ return a - b; }).forEach(function(i){
+    var day = days[i];
+    var cell = ensureCell(day, p.slot);
+    if(cellItems(cell).some(function(x){ return x.recipeId === p.rid; })){ skipped++; return; }
+    var r = S.recipes.find(function(x){ return x.id === p.rid; });
+    if(!r) return;
+    cellItems(cell).push({itemId:uid(), course:courseOf(r), recipeId:r.id,
+      title:r.title, source:r.source || "Saved recipe", link:r.link || ""});
+    r.lastUsed = Date.now();
+    openSlots.add(day + "::" + p.slot);
+    added.push(day.slice(0,3));
+  });
+
+  rebuildShopFromPlan();
+  S.weekOffset = saved;
+  save();
+
+  /* Stay on the recipe. Being dumped into the planner with no way back
+     meant leaving and reopening the recipe to plan a second day. */
+  planPick = {rid:p.rid, offset:p.offset, days:p.days, slot:p.slot,
+    done:{n:added.length, skipped:skipped, offset:p.offset,
+          firstDay:p.days.slice().sort(function(a, b){ return a - b; })[0],
+          where:added.length
+            ? added.join(", ") + " \u00b7 " + p.slot.toLowerCase()
+            : "nothing new to add"}};
+  openRecipe(p.rid);
+  if(added.length) toast("Added to " + added.length + (added.length === 1 ? " day" : " days"));
 }
 
 /* ═══ AMOUNTS, STOCK LEVELS AND PACK SIZES ═════════════════
@@ -4690,6 +4780,88 @@ function renderCosts(){
       + (x.coverage < 0.999 ? ' · ' + Math.round(x.coverage * 100) + '% priced' : "") + '</div></div>'
       + '<span class="chev">›</span></div>';
   }).join("");
+}
+
+/* ═══ RECIPE SEARCH ════════════════════════════════════════
+   Fifty-five recipes scroll; a hundred will not. Searches the
+   title, every ingredient, the source and the notes, so "chick"
+   finds Chicken Chow Mein and "paprika" finds everything that
+   uses it — which is the harder question and the more useful one.
+   ═════════════════════════════════════════════════════════ */
+var recipeQuery = "", recipeFilter = "all";
+
+function forgetHaystacks(){ S.recipes.forEach(function(r){ delete r._hay; }); }
+function recipeHaystack(r){
+  if(r._hay) return r._hay;
+  var bits = [r.title || "", r.category || "", r.source || "", r.notes || "",
+              courseOf(r), (r.slots || []).join(" ")];
+  (r.ingredients || []).forEach(function(g){
+    bits.push(typeof g === "object" ? (g.name || "") : String(g));
+  });
+  r._hay = bits.join(" ").toLowerCase();
+  return r._hay;
+}
+function setRecipeQuery(v){
+  recipeQuery = String(v || "").trim().toLowerCase();
+  renderRecipes();
+}
+function setRecipeFilter(v){
+  recipeFilter = v;
+  renderRecipes();
+}
+function clearRecipeSearch(){
+  recipeQuery = ""; recipeFilter = "all";
+  var el = document.getElementById("rq");
+  if(el) el.value = "";
+  renderRecipes();
+}
+/* Every word must appear somewhere, so "chicken noodle" narrows
+   rather than widening the way an OR search would. */
+function recipeMatches(r){
+  if(recipeFilter !== "all"){
+    if(recipeFilter === "quick"){ if(!totalMins(r) || totalMins(r) > 30) return false; }
+    else if(recipeFilter === "untested"){ if(!r.aiWritten || r.cooked) return false; }
+    else if(recipeFilter === "photo"){ if(!r.hasPhoto && !r.photo) return false; }
+    else if(COURSES.indexOf(recipeFilter) !== -1){ if(courseOf(r) !== recipeFilter) return false; }
+    else if(r.category !== recipeFilter) return false;
+  }
+  if(!recipeQuery) return true;
+  var hay = recipeHaystack(r);
+  return recipeQuery.split(/\s+/).every(function(w){ return hay.indexOf(w) !== -1; });
+}
+/* Why a recipe matched, when it was not the title that did it. */
+function matchNote(r){
+  if(!recipeQuery) return "";
+  var title = String(r.title || "").toLowerCase();
+  var words = recipeQuery.split(/\s+/).filter(function(w){ return title.indexOf(w) === -1; });
+  if(!words.length) return "";
+  var hits = [];
+  (r.ingredients || []).forEach(function(g){
+    var n = (typeof g === "object" ? g.name : String(g)) || "";
+    if(words.some(function(w){ return n.toLowerCase().indexOf(w) !== -1; })
+       && hits.indexOf(n) === -1) hits.push(n);
+  });
+  return hits.length ? "matches " + hits.slice(0, 3).join(", ") : "";
+}
+function recipeSearchHtml(shown, total){
+  var opts = [["all", "All"]]
+    .concat(RECIPE_CATS.map(function(c){ return [c, c]; }))
+    .concat(COURSES.map(function(c){ return [c, c + "s"]; }))
+    .concat([["quick", "Under 30 min"], ["photo", "With a photo"], ["untested", "Not yet cooked"]]);
+  return '<div class="card">'
+    + '<input type="search" id="rq" placeholder="Search titles and ingredients" '
+    + 'value="' + esc(recipeQuery) + '" oninput="setRecipeQuery(this.value)">'
+    + '<div class="chips" style="margin-top:9px">'
+    + opts.map(function(o){
+        return '<div class="chip' + (recipeFilter === o[0] ? " on" : "") + '"'
+          + ' onclick="setRecipeFilter(\'' + esc(o[0]) + '\')">' + esc(o[1]) + '</div>';
+      }).join("")
+    + '</div>'
+    + ((recipeQuery || recipeFilter !== "all")
+        ? '<div class="hint" style="margin-top:9px">Showing ' + shown + ' of ' + total
+          + ' · <span style="text-decoration:underline" onclick="clearRecipeSearch()">clear</span></div>'
+        : "")
+    + '</div>';
 }
 
 </script>
