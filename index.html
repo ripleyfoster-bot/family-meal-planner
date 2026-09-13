@@ -343,6 +343,12 @@ body.dark .qbox{color:var(--ink);}
 <!-- ══ RECIPES ══ -->
 <div class="view" id="v-recipes" hidden>
 <div id="recipes-list">
+  <div id="recipe-search"></div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="btn ghost sm" id="rt-scan-btn" onclick="toggleRecipeTool('scan')">Scan a cookbook</button>
+    <button class="btn ghost sm" id="rt-add-btn" onclick="toggleRecipeTool('add')">Add one yourself</button>
+  </div>
+  <div id="rt-scan" hidden>
   <div class="sec-hd">Scan from a cookbook</div>
   <div class="card">
     <div class="hint">Photograph the pages. Claude reads the title, ingredients and method into your saved recipes.</div>
@@ -354,6 +360,8 @@ body.dark .qbox{color:var(--ink);}
     </div>
     <div id="scan-out"></div>
   </div>
+  </div>
+  <div id="rt-add" hidden>
   <div class="sec-hd">Add one yourself</div>
   <div class="card">
     <label class="fld">Title</label>
@@ -375,13 +383,13 @@ body.dark .qbox{color:var(--ink);}
     <input type="text" id="mr-src" placeholder="bbcgoodfood.com/…" autocomplete="off">
     <button class="btn wide" style="margin-top:13px" onclick="saveManualRecipe()">Save recipe</button>
   </div>
-  <div class="sec-hd">Saved recipes</div>
-  <div class="card">
+  </div>
+  <div id="recipe-groups"></div>
+  <div class="card" style="margin-top:14px">
     <div class="hint">Each recipe carries the meals it suits, so a pasta bake stops turning up at breakfast.
       Existing ones are guessed from the recipe — Claude can go through them properly in one pass.</div>
     <button class="btn wide ghost sm" id="tag-btn" style="margin-top:10px" onclick="tagAllRecipes()">Tag my recipes with Claude</button>
   </div>
-  <div id="recipe-groups"></div>
 </div>
 
 <div id="recipe-detail" hidden></div>
@@ -400,6 +408,7 @@ body.dark .qbox{color:var(--ink);}
   </div>
 
   <div id="shop-list-view">
+    <div id="shop-range"></div>
     <div class="row tight" style="margin-bottom:7px">
       <input type="text" id="shop-manual" list="food-options" placeholder="Add anything…" autocomplete="off"
              onkeydown="if(event.key==='Enter')addShopManual()">
@@ -590,7 +599,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "35";
+var VERSION = "36";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -880,6 +889,7 @@ function blankState(){
     deviceId:"", deviceName:"", gen:0, savedAt:0, savedBy:"", exportLog:[],
     plu:{},
     dayIdx:0, weekOffset:0, apiKey:"",
+    shopFrom:"", shopTo:"",
     theme:"pine", mode:"auto"
   };
 }
@@ -1028,6 +1038,79 @@ function dayDate(idx){
 function fmtDate(d){
   return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
 }
+/* ═══ THE PLAN IS KEYED BY REAL DATE ═══════════════════════
+   Build 35 keyed the plan by weekday name alone, so one Monday
+   cell was shared by every week there had ever been. With a
+   meal holding several dishes, every roast ever put on a Sunday
+   was still in that Sunday — and all of it landed on the list.
+   Cells now live under a real date (2026-09-14). Everything
+   that used to pass a weekday name still can: the name is
+   resolved against the week being viewed.
+   ═════════════════════════════════════════════════════════ */
+function ymd(d){
+  var x = new Date(d); x.setHours(0,0,0,0);
+  return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0")
+       + "-" + String(x.getDate()).padStart(2, "0");
+}
+function fromYmd(k){ var p = String(k).split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function isDateKey(k){ return /^\d{4}-\d{2}-\d{2}$/.test(String(k)); }
+function planKey(day){
+  if(isDateKey(day)) return day;
+  var i = orderedDays().indexOf(day);
+  return ymd(dayDate(i < 0 ? 0 : i));
+}
+function weekdayOf(key){ return DAYS[(fromYmd(key).getDay() + 6) % 7]; }
+function planCells(day){ return S.plan[planKey(day)]; }
+function fmtKey(k){ return fmtDate(fromYmd(k)); }
+/* Old weekday-keyed cells carry no date, so they cannot be placed.
+   Ripley chose to clear them rather than guess — recipes are untouched. */
+function clearUndatedPlan(){
+  var dropped = 0;
+  Object.keys(S.plan).forEach(function(k){
+    if(isDateKey(k)) return;
+    Object.keys(S.plan[k] || {}).forEach(function(slot){
+      var c = S.plan[k][slot];
+      dropped += (c && c.items) ? c.items.length : (c && c.chosen ? 1 : 0);
+    });
+    delete S.plan[k];
+  });
+  return dropped;
+}
+/* ── the shopping range ── */
+function shopRange(){
+  if(!S.shopFrom || !S.shopTo || !isDateKey(S.shopFrom) || !isDateKey(S.shopTo)){
+    var t = new Date(); t.setHours(0,0,0,0);
+    var e = new Date(t); e.setDate(e.getDate() + 6);
+    S.shopFrom = ymd(t); S.shopTo = ymd(e);
+  }
+  if(S.shopTo < S.shopFrom) S.shopTo = S.shopFrom;
+  return {from:S.shopFrom, to:S.shopTo};
+}
+function inShopRange(key){
+  var r = shopRange();
+  return isDateKey(key) && key >= r.from && key <= r.to;
+}
+function shopRangeKeys(){
+  return Object.keys(S.plan).filter(inShopRange).sort();
+}
+function setShopRange(from, to){
+  if(from && isDateKey(from)) S.shopFrom = from;
+  if(to && isDateKey(to)) S.shopTo = to;
+  if(S.shopTo < S.shopFrom) S.shopTo = S.shopFrom;
+  rebuildShopFromPlan(); save(); renderShop();
+}
+function shopRangePreset(p){
+  var t = new Date(); t.setHours(0,0,0,0);
+  var a, b;
+  if(p === "week" || p === "next"){
+    var saved = S.weekOffset; S.weekOffset = (p === "week") ? 0 : 1;
+    a = weekStartDate(); b = new Date(a); b.setDate(b.getDate() + 6);
+    S.weekOffset = saved;
+  } else {
+    a = t; b = new Date(t); b.setDate(b.getDate() + (p === "d14" ? 13 : 6));
+  }
+  setShopRange(ymd(a), ymd(b));
+}
 function updateBadge(){
   var a = weekStartDate(), b = new Date(a); b.setDate(b.getDate()+6);
   var lbl = S.weekOffset===0 ? "This week" : S.weekOffset===1 ? "Next week"
@@ -1040,9 +1123,10 @@ function slotsForMember(id){
   return (own && own.length) ? own : S.slots;
 }
 function ensureCell(day, slot){
-  if(!S.plan[day]) S.plan[day] = {};
-  if(!S.plan[day][slot]) S.plan[day][slot] = {modes:{}, chosen:null, suggestions:[], loaded:false, addedIds:[]};
-  return S.plan[day][slot];
+  var k = planKey(day);
+  if(!S.plan[k]) S.plan[k] = {};
+  if(!S.plan[k][slot]) S.plan[k][slot] = {modes:{}, chosen:null, suggestions:[], loaded:false, addedIds:[]};
+  return S.plan[k][slot];
 }
 function stdKey(slot,title){ return slot + "||" + title; }
 
@@ -1436,6 +1520,31 @@ function setShopView(v, el){
   document.getElementById("shop-costs-view").hidden = (v !== "costs");
   renderShop();
 }
+/* Which days the list is bought for. Both ends are needed: an
+   open-ended "from today" would keep generating tins of soup for
+   every repeated lunch there will ever be. */
+function renderShopRange(){
+  var box = document.getElementById("shop-range"); if(!box) return;
+  var r = shopRange();
+  var keys = shopRangeKeys(), meals = 0;
+  keys.forEach(function(k){
+    Object.keys(S.plan[k]).forEach(function(sl){ if(hasMeal(S.plan[k][sl])) meals++; });
+  });
+  var days = Math.round((fromYmd(r.to) - fromYmd(r.from)) / 864e5) + 1;
+  var presets = [["week","This week"],["next","Next week"],["d7","Next 7 days"],["d14","Next 14 days"]];
+  box.innerHTML = '<div class="card" style="margin-bottom:10px">'
+    + '<div class="fld" style="margin-top:0">Shopping for</div>'
+    + '<div class="row">'
+    + '<div><label class="fld">From</label><input type="date" id="shop-from" value="' + esc(r.from) + '" onchange="setShopRange(this.value, null)"></div>'
+    + '<div><label class="fld">To</label><input type="date" id="shop-to" value="' + esc(r.to) + '" onchange="setShopRange(null, this.value)"></div>'
+    + '</div>'
+    + '<div class="chips" style="margin-top:9px">'
+    + presets.map(function(p){ return '<div class="chip" onclick="shopRangePreset(\'' + p[0] + '\')">' + p[1] + '</div>'; }).join("")
+    + '</div>'
+    + '<div class="hint" style="margin-top:8px">' + days + ' day' + (days === 1 ? "" : "s") + ' · ' + meals + ' planned meal' + (meals === 1 ? "" : "s")
+    + ' · plus anything marked low or out in the cupboard</div>'
+    + '</div>';
+}
 function renderShop(){
   if(shopView === "cupboard"){ renderCupboard(); return; }
   if(shopView === "layout"){ renderLayout(); return; }
@@ -1445,11 +1554,14 @@ function renderShop(){
   if(shopView === "foods"){ renderFoods(); return; }
   renderAislePicker();
   primePrices();
+  renderShopRange();
   var el = document.getElementById("shop-body");
   var sum = document.getElementById("shop-summary");
   if(!S.shop.length){
+    var rr = shopRange();
     sum.innerHTML = "";
-    el.innerHTML = '<div class="empty">Nothing on the list yet.<br>Items appear here when you choose a meal.</div>';
+    el.innerHTML = '<div class="empty">Nothing on the list for ' + esc(fmtKey(rr.from)) + ' – ' + esc(fmtKey(rr.to))
+      + '.<br>Plan a meal on one of those days, or widen the dates above.</div>';
     return;
   }
   var need = S.shop.filter(i => i.status === "need").length;
@@ -1696,7 +1808,8 @@ async function loadSuggestions(day, slot){
 
   var planned = [];
   orderedDays().forEach(d => {
-    if(S.plan[d]) Object.values(S.plan[d]).forEach(function(c){
+    var cs = planCells(d);
+    if(cs) Object.values(cs).forEach(function(c){
       liveItems(c).forEach(function(lv){ planned.push(lv.title); });
     });
   });
@@ -1882,15 +1995,26 @@ function delRecipe(id){
   save();
   if(currentRecipe === id) closeRecipe(); else renderRecipes();
 }
+function toggleRecipeTool(which){
+  ["scan", "add"].forEach(function(w){
+    var box = document.getElementById("rt-" + w), btn = document.getElementById("rt-" + w + "-btn");
+    var open = (w === which) ? box.hidden : false;
+    box.hidden = !open;
+    btn.classList.toggle("on", open);
+  });
+  if(which === "add" && !document.getElementById("rt-add").hidden) document.getElementById("mr-title").focus();
+}
 function renderRecipes(){
   var el = document.getElementById("recipe-groups");
   if(!S.recipes.length){
-    el.innerHTML = '<div class="empty">No saved recipes yet.</div>'; return;
+    document.getElementById("recipe-search").innerHTML = "";
+    el.innerHTML = '<div class="empty">No saved recipes yet.<br>Scan a cookbook or add one above.</div>'; return;
   }
   var hits = S.recipes.filter(recipeMatches);
-  var html = recipeSearchHtml(hits.length, S.recipes.length);
+  renderRecipeSearch(hits.length, S.recipes.length);
+  var html = "";
   if(!hits.length){
-    el.innerHTML = html + '<div class="empty">Nothing matches.<br><br>'
+    el.innerHTML = '<div class="empty">Nothing matches.<br><br>'
       + '<button class="btn ghost" onclick="clearRecipeSearch()">Clear the search</button></div>';
     return;
   }
@@ -3533,11 +3657,12 @@ function addAmounts(a, b){
   return {n:a.n + b.n, unit:a.unit};
 }
 
-/* What the planned week actually calls for, per food. */
+/* What the shopping range actually calls for, per food. */
 function weeklyDemand(){
   var need = {};
-  orderedDays().forEach(function(day){
-    var cells = S.plan[day]; if(!cells) return;
+  shopRangeKeys().forEach(function(key){
+    var cells = S.plan[key]; if(!cells) return;
+    var day = weekdayOf(key);
     Object.keys(cells).forEach(function(slot){
       var c = cells[slot]; if(!c) return;
       var list = [];
@@ -3655,13 +3780,18 @@ function rebuildShopFromPlan(){
     return i.manual || i.restock || i.status === "bought";
   });
 
-  Object.keys(S.plan).forEach(function(day){
-    var cells = S.plan[day];
+  /* Only the days inside the shopping range feed the list. A
+     dish planned outside it keeps its place in the planner and
+     simply is not bought for yet. */
+  Object.keys(S.plan).forEach(function(key){
+    var cells = S.plan[key];
+    var day = weekdayOf(key);
+    var counts = inShopRange(key);
     Object.keys(cells).forEach(function(slot){
       var cell = cells[slot];
       cellItems(cell).forEach(function(it){
         var lv = liveItem(it);
-        if(!lv){ it.addedIds = []; return; }
+        if(!lv || !counts){ it.addedIds = []; return; }
         /* Scaled to the number actually being cooked for, not the
            number the recipe happens to be written for. */
         it.addedIds = addIngredients(dishIngredients(it, day, slot), lv.title);
@@ -4814,6 +4944,7 @@ function clearRecipeSearch(){
   var el = document.getElementById("rq");
   if(el) el.value = "";
   renderRecipes();
+  var v = document.getElementById("v-recipes"); if(v) v.scrollTop = 0;
 }
 /* Every word must appear somewhere, so "chicken noodle" narrows
    rather than widening the way an OR search would. */
@@ -4843,25 +4974,35 @@ function matchNote(r){
   });
   return hits.length ? "matches " + hits.slice(0, 3).join(", ") : "";
 }
-function recipeSearchHtml(shown, total){
+/* The search box sits at the top of the tab and is built once.
+   Rebuilding it on every keystroke threw the keyboard away on
+   the iPhone, so typing only refreshes the chips, the count and
+   the list beneath. */
+function renderRecipeSearch(shown, total){
+  var box = document.getElementById("recipe-search"); if(!box) return;
+  if(!document.getElementById("rq")){
+    box.innerHTML = '<div class="card" style="margin-bottom:12px">'
+      + '<input type="search" id="rq" placeholder="Search ' + total + ' recipes — titles and ingredients" '
+      + 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" '
+      + 'oninput="setRecipeQuery(this.value)">'
+      + '<div class="chips" id="rq-chips" style="margin-top:9px"></div>'
+      + '<div class="hint" id="rq-count" style="margin-top:9px"></div>'
+      + '</div>';
+  }
   var opts = [["all", "All"]]
     .concat(RECIPE_CATS.map(function(c){ return [c, c]; }))
     .concat(COURSES.map(function(c){ return [c, c + "s"]; }))
     .concat([["quick", "Under 30 min"], ["photo", "With a photo"], ["untested", "Not yet cooked"]]);
-  return '<div class="card">'
-    + '<input type="search" id="rq" placeholder="Search titles and ingredients" '
-    + 'value="' + esc(recipeQuery) + '" oninput="setRecipeQuery(this.value)">'
-    + '<div class="chips" style="margin-top:9px">'
-    + opts.map(function(o){
-        return '<div class="chip' + (recipeFilter === o[0] ? " on" : "") + '"'
-          + ' onclick="setRecipeFilter(\'' + esc(o[0]) + '\')">' + esc(o[1]) + '</div>';
-      }).join("")
-    + '</div>'
-    + ((recipeQuery || recipeFilter !== "all")
-        ? '<div class="hint" style="margin-top:9px">Showing ' + shown + ' of ' + total
-          + ' · <span style="text-decoration:underline" onclick="clearRecipeSearch()">clear</span></div>'
-        : "")
-    + '</div>';
+  document.getElementById("rq-chips").innerHTML = opts.map(function(o){
+    return '<div class="chip' + (recipeFilter === o[0] ? " on" : "") + '"'
+      + ' onclick="setRecipeFilter(\'' + esc(o[0]) + '\')">' + esc(o[1]) + '</div>';
+  }).join("");
+  var cnt = document.getElementById("rq-count");
+  var active = recipeQuery || recipeFilter !== "all";
+  cnt.innerHTML = active
+    ? 'Showing ' + shown + ' of ' + total + ' · <span style="text-decoration:underline" onclick="clearRecipeSearch()">clear</span>'
+    : total + ' recipes';
+  cnt.hidden = false;
 }
 
 </script>
@@ -5207,7 +5348,7 @@ function clearKey(){
 function menuText(){
   var out = ["MENU — week of " + fmtDate(weekStartDate()), ""];
   orderedDays().forEach((day, i) => {
-    var cells = S.plan[day]; if(!cells) return;
+    var cells = planCells(day); if(!cells) return;
     var lines = [];
     ALL_SLOTS.forEach(sl => {
       if(!cells[sl]) return;
@@ -5290,7 +5431,10 @@ function importData(ev){
       }
       var photos = d._photos || {};
       delete S._photos;
+      var undated = clearUndatedPlan();
+      if(undated) rebuildShopFromPlan();
       save(); applyTheme(); goTab("plan");
+      if(undated) toast(undated + " undated planned dishes from the old planner were not restored");
       var ids = Object.keys(photos);
       if(ids.length){
         toast("Restoring " + ids.length + " photos…");
@@ -5305,8 +5449,9 @@ function importData(ev){
   r.readAsText(f); ev.target.value = "";
 }
 function wipeWeek(){
-  if(!confirm("Clear every meal chosen for this week?")) return;
-  S.plan = {}; S.shop = S.shop.filter(i => i.manual);
+  if(!confirm("Clear every meal chosen for the week on screen?")) return;
+  orderedDays().forEach(function(d){ delete S.plan[planKey(d)]; });
+  rebuildShopFromPlan();
   openSlots.clear(); save(); goTab("plan"); toast("Week cleared");
 }
 function wipeAll(){
@@ -5332,9 +5477,11 @@ function wipeAll(){
     tidyIngredients();
     var rep = repairAllIngredients();
     var seeded = seedPacks();
-    if(rep.fixed || seeded){
+    var undated = clearUndatedPlan();
+    if(rep.fixed || seeded || undated){
       rebuildShopFromPlan(); save();
-      toast("Tidied " + rep.fixed + " quantities, set " + seeded + " pack sizes");
+      if(undated) toast("Planner now runs by date — " + undated + " old undated dishes cleared, list rebuilt");
+      else toast("Tidied " + rep.fixed + " quantities, set " + seeded + " pack sizes");
     }
     renderBackupNudge();
     migratePhotosToIDB().then(function(n){
