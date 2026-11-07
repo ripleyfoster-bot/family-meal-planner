@@ -604,7 +604,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "42";
+var VERSION = "43";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1463,7 +1463,7 @@ function inCupboard(name){
   var n = normalise(name);
   return S.cupboard.find(c => sameItem(normalise(c.name), n));
 }
-function addIngredients(list, mealTitle){
+function addIngredients(list, mealTitle, day){
   var added = [];
   (list || []).forEach(raw => {
     var p = parseIngredient(raw);
@@ -1474,6 +1474,15 @@ function addIngredients(list, mealTitle){
     var existing = S.shop.find(i => sameItem(normalise(i.name), n) && i.status !== "bought");
     if(existing){
       if(!existing.meals.includes(mealTitle)) existing.meals.push(mealTitle);
+      /* Loop 13: the same dish on two dates still summed into one row,
+         but the row could not say so. Every use is kept with its date. */
+      if(day){
+        existing.uses = existing.uses || [];
+        /* One dish on one date is one use, even when the recipe lists
+           the same food twice (Cottage Pie's carrots). */
+        if(!existing.uses.some(function(u){ return u.t === mealTitle && u.d === day; }))
+          existing.uses.push({t:mealTitle, d:day});
+      }
       /* Two recipes wanting 250g of bacon means 500g, not 250g. Amounts in
          the same unit are added; anything that will not add is kept beside
          it so nothing is silently dropped. */
@@ -1498,6 +1507,7 @@ function addIngredients(list, mealTitle){
       aisle: resolveAisle(staple ? staple.aisle : aisleFor(p.name)),
       status: staple ? "have" : "need",
       fromCupboard: !!staple, meals: [mealTitle], manual: false, extra: [],
+      uses: day ? [{t:mealTitle, d:day}] : [],
       price: null, priceGuess: false
     };
     learnFood(p.name, {use:"recipe"});
@@ -1616,7 +1626,7 @@ function renderShop(){
     html += '<div class="aisle-hd">' + esc(a.name) + '</div>';
     items.forEach(i => {
       var q = [i.qty, i.unit].filter(Boolean).join(" ");
-      var meals = (i.meals || []).join(", ");
+      var meals = mealsLine(i);
       var pk = packsNeeded(i.name, parseAmount(q));
       /* What goes in the trolley is the headline; what the recipes need
          goes underneath, so the arithmetic is visible rather than implied. */
@@ -1727,6 +1737,18 @@ function exitStore(){
   var cur = VIEWS.find(function(v){ return !document.getElementById("v-" + v).hidden; }) || "shop";
   document.getElementById("top-sub").textContent = TITLES[cur][1];
   renderShop();
+}
+/* "Becky's workday breakfast ×4 · Mon 9, Wed 11, Thu 12, Fri 13".
+   A dish used once reads as it always did; older rows with no
+   dates recorded fall back to the plain title list. */
+function mealsLine(i){
+  var uses = i.uses || [];
+  return (i.meals || []).map(function(t){
+    var ds = uses.filter(function(u){ return u.t === t && u.d; }).map(function(u){ return u.d; }).sort();
+    if(ds.length < 2) return t;
+    var when = ds.map(function(d){ return weekdayOf(d).slice(0,3) + " " + fromYmd(d).getDate(); }).join(", ");
+    return t + " \u00d7" + ds.length + " \u00b7 " + when;
+  }).join(", ");
 }
 function shopListText(){
   var out = ["Shopping list — " + (currentStore() ? currentStore().name : ""), ""];
@@ -3838,7 +3860,7 @@ function rebuildShopFromPlan(){
         if(!lv || !counts){ it.addedIds = []; return; }
         /* Scaled to the number actually being cooked for, not the
            number the recipe happens to be written for. */
-        it.addedIds = addIngredients(dishIngredients(it, day, slot), lv.title);
+        it.addedIds = addIngredients(dishIngredients(it, day, slot), lv.title, day);
       });
     });
   });
