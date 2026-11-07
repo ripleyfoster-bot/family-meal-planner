@@ -601,7 +601,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "40";
+var VERSION = "41";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1163,6 +1163,27 @@ function changeWeek(d){
   S.weekOffset += d;
   if(S.dayIdx >= orderedDays().length) S.dayIdx = 0;
   save(); renderPlan();
+}
+/* Swipe left/right on the planner: day view steps a day, week view steps
+   a week. A clear horizontal flick only — a vertical scroll, a slow drag
+   or a two-finger gesture leaves the planner alone. */
+function planSwipe(){
+  var el = document.getElementById("v-plan"), sx = 0, sy = 0, st = 0, on = false;
+  el.addEventListener("touchstart", function(e){
+    on = (e.touches.length === 1);
+    if(!on) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+  }, {passive:true});
+  el.addEventListener("touchend", function(e){
+    if(!on || e.touches.length) return;
+    on = false;
+    if(document.getElementById("plan-main").hidden) return;
+    var t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if(Date.now() - st > 600) return;
+    if(Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    var dir = dx < 0 ? 1 : -1;
+    if(S.planView === "week") changeWeek(dir); else changeDay(dir);
+  }, {passive:true});
 }
 function renderPlan(){
   updateBadge();
@@ -5517,6 +5538,7 @@ function wipeAll(){
     document.getElementById("mr-cat").innerHTML =
       RECIPE_CATS.map(c => '<option>' + c + '</option>').join("");
     updateBadge();
+    planSwipe();
     goTab("plan");
     if("serviceWorker" in navigator){
       navigator.serviceWorker.register("sw.js").catch(() => {});
