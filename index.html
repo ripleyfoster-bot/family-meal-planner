@@ -322,6 +322,9 @@ body.dark .qbox{color:var(--ink);}
     <div class="sec-hd">Meals they eat</div>
     <div class="card"><div class="chips" id="md-slots"></div>
       <div class="hint" style="margin-top:8px">Leave all off to use the household default.</div></div>
+    <div class="sec-hd">Different on some days</div>
+    <div class="card"><div id="md-days"></div>
+      <div class="hint" style="margin-top:8px">Set once and it applies every week. A change made in the planner still wins for that one date.</div></div>
     <div class="sec-hd">Allergies — always excluded</div>
     <div class="card">
       <div class="chips" id="md-allergies" style="margin-bottom:9px"></div>
@@ -601,7 +604,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "41";
+var VERSION = "42";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -822,7 +825,7 @@ function recipesForSlot(slot, day){
   var reserved = {};
   Object.keys(OWN_LIST_SLOTS).forEach(function(k){ reserved[OWN_LIST_SLOTS[k]] = true; });
   var wanted = {};
-  eatersFor(day, slot).forEach(function(m){ wanted[modeCategory(cell.modes[m.id] || m.mode)] = true; });
+  eatersFor(day, slot).forEach(function(m){ wanted[modeCategory(modeFor(day, cell, m))] = true; });
   var pool = S.recipes.filter(function(r){
     return !reserved[r.category] && suitsSlot(r, slot);
   });
@@ -884,7 +887,7 @@ function ctxLabel(id){
 var S = blankState();
 function blankState(){
   return {
-    members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{},
+    members:[], weekStart:"Monday", slots:["Dinner"], memberSlots:{}, memberWeekModes:{},
     plan:{}, standards:{}, recipes:[], shop:[], cupboard:[],
     stores:[{id:"default", name:"My shop", aisles:defaultAisles()}], activeStore:"default",
     prices:{}, spend:[], aliases:{}, foods:{}, lastExport:null, planView:"day",
@@ -1240,18 +1243,25 @@ function toggleSlot(day, slot){
   openSlots.has(k) ? openSlots.delete(k) : openSlots.add(k);
   renderPlan();
 }
+/* Build 42: a member's mode on a given date resolves in three steps —
+   the planner's one-date override, then their weekday default (set in
+   the member screen), then their usual mode. */
+function modeFor(day, cell, m){
+  var wk = S.memberWeekModes[m.id] || {};
+  return cell.modes[m.id] || wk[weekdayOf(planKey(day))] || m.mode;
+}
 function eatersFor(day, slot){
   var cell = ensureCell(day, slot);
   return S.members.filter(m => {
     if(!slotsForMember(m.id).includes(slot)) return false;
-    var mode = cell.modes[m.id] || m.mode;
+    var mode = modeFor(day, cell, m);
     return mode !== "Fasting" && mode !== "Skip" && mode !== "Making own";
   });
 }
 function slotBody(day, slot, cell, eating){
   var h = "";
   S.members.filter(m => slotsForMember(m.id).includes(slot)).forEach(m => {
-    var mode = cell.modes[m.id] || m.mode;
+    var mode = modeFor(day, cell, m);
     h += '<div class="mode-row">'
        + '<div class="avatar" style="width:24px;height:24px;font-size:10px;background:' + m.colour + '">' + esc(initials(m.name)) + '</div>'
        + '<div class="who">' + esc(m.name) + '</div>'
@@ -1820,12 +1830,12 @@ async function loadSuggestions(day, slot){
   var btn = document.getElementById("load-" + (day+slot).replace(/\W/g,""));
   if(btn){ btn.disabled = true; btn.innerHTML = '<span class="pulse">Finding options…</span>'; }
 
-  var diets = [...new Set(eating.map(m => cell.modes[m.id] || m.mode))].filter(d => d !== "Standard");
+  var diets = [...new Set(eating.map(m => modeFor(day, cell, m)))].filter(d => d !== "Standard");
   var profiles = eating.map(m => {
     var likes = (m.likes||[]).map(p => p.food + (p.contexts.length ? " (likes: " + p.contexts.map(ctxLabel).join(", ") + ")" : "") + (p.note ? " — " + p.note : "")).join("; ");
     var dis = (m.dislikes||[]).map(p => p.food + (p.contexts.length ? " (dislikes when: " + p.contexts.map(ctxLabel).join(", ") + ")" : "") + (p.note ? " — " + p.note : "")).join("; ");
     var al = (m.allergies||[]).join(", ");
-    return m.name + ": " + (cell.modes[m.id] || m.mode)
+    return m.name + ": " + modeFor(day, cell, m)
       + (likes ? " | likes: " + likes : "") + (dis ? " | dislikes: " + dis : "")
       + (al ? " | ALWAYS EXCLUDE: " + al : "");
   }).join("\n");
@@ -2846,7 +2856,7 @@ function categoryForSlot(slot, day){
   if(OWN_LIST_SLOTS[slot]) return OWN_LIST_SLOTS[slot];
   var cell = ensureCell(day, slot);
   var eating = eatersFor(day, slot);
-  var modes = eating.map(function(m){ return cell.modes[m.id] || m.mode; });
+  var modes = eating.map(function(m){ return modeFor(day, cell, m); });
   if(modes.length && modes.every(function(m){ return m === "Slimming World"; })) return "Slimming World";
   if(modes.length && modes.every(function(m){ return m === "Low carb / HP"; })) return "Low carb / HP";
   return "General eating";
@@ -5115,7 +5125,21 @@ function renderMemberDetail(){
   var own = S.memberSlots[m.id] || [];
   document.getElementById("md-slots").innerHTML = ALL_SLOTS.map(sl =>
     '<div class="chip' + (own.includes(sl)?" on":"") + '" onclick="toggleMemberSlot(\'' + esc(sl) + '\')">' + esc(sl) + '</div>').join("");
+  var wk = S.memberWeekModes[m.id] || {};
+  document.getElementById("md-days").innerHTML = DAYS.map(d =>
+    '<div class="mode-row"><div class="who">' + d + '</div>'
+    + '<select class="mode-sel" onchange="setMemberDayMode(\'' + d + '\',this.value)">'
+    + '<option value=""' + (wk[d] ? "" : " selected") + '>Usual</option>'
+    + MODES.map(o => '<option' + (o===wk[d]?" selected":"") + '>' + esc(o) + '</option>').join("")
+    + '</select></div>').join("");
   renderAllergies(); renderPrefs("like"); renderPrefs("dislike");
+}
+function setMemberDayMode(day, v){
+  var m = me(); if(!m) return;
+  var wk = S.memberWeekModes[m.id] || {};
+  if(v) wk[day] = v; else delete wk[day];
+  if(Object.keys(wk).length) S.memberWeekModes[m.id] = wk; else delete S.memberWeekModes[m.id];
+  save(); renderMemberDetail();
 }
 function setMemberMode(v){ var m = me(); if(!m) return; m.mode = v; save(); renderMemberDetail(); }
 function setMemberColour(c){
@@ -5134,6 +5158,7 @@ function deleteMember(){
   if(!confirm("Remove " + m.name + " from the household?")) return;
   S.members = S.members.filter(x => x.id !== m.id);
   delete S.memberSlots[m.id];
+  delete S.memberWeekModes[m.id];
   save(); showHouseList();
 }
 function addAllergy(){
