@@ -600,7 +600,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "37";
+var VERSION = "38";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -3688,8 +3688,15 @@ function demandFor(name){
 }
 
 /* Recipes are written in cooking amounts; shops sell packs. */
+/* The same key setPack writes under — learnFood cleans the name first,
+   so a lookup on the raw name ("1 tbsp butter, melted") missed what was
+   saved under "butter" and the pack was re-seeded every launch (build 38). */
+function foodKey(name){
+  var clean = cleanFoodName(name);
+  return (clean && normalise(clean)) || normalise(name);
+}
 function packFor(name){
-  var f = S.foods[normalise(name)];
+  var f = S.foods[foodKey(name)] || S.foods[normalise(name)];
   return (f && f.pack) ? f.pack : "";
 }
 function setPack(name, packText){
@@ -5483,7 +5490,12 @@ function wipeAll(){
     if(rep.fixed || seeded || undated){
       rebuildShopFromPlan(); save();
       if(undated) toast("Planner now runs by date — " + undated + " old undated dishes cleared, list rebuilt");
-      else toast("Tidied " + rep.fixed + " quantities, set " + seeded + " pack sizes");
+      else {
+        var done = [];
+        if(rep.fixed) done.push("Tidied " + rep.fixed + (rep.fixed === 1 ? " quantity" : " quantities"));
+        if(seeded) done.push("Set pack sizes for " + seeded + " new " + (seeded === 1 ? "ingredient" : "ingredients"));
+        if(done.length) toast(done.join(" · "));
+      }
     }
     renderBackupNudge();
     migratePhotosToIDB().then(function(n){
