@@ -3836,6 +3836,13 @@ function liveChosen(cell){
    cannot unpick one meal's share from it. So an edit rebuilds the whole
    list from the plan, keeping anything you added yourself, anything
    already in the trolley, and the prices and cupboard marks you set. */
+/* Rows written before build 43 carry no dates. True once per device
+   (and once per import of an older backup); the rebuild stamps them. */
+function shopRowsUndated(){
+  return S.shop.some(function(i){
+    return !i.manual && !i.restock && i.status !== "bought" && i.uses === undefined;
+  });
+}
 function rebuildShopFromPlan(){
   var carried = {};
   S.shop.forEach(function(i){
@@ -5517,7 +5524,7 @@ function importData(ev){
       var photos = d._photos || {};
       delete S._photos;
       var undated = clearUndatedPlan();
-      if(undated) rebuildShopFromPlan();
+      if(undated || shopRowsUndated()) rebuildShopFromPlan();
       save(); applyTheme(); goTab("plan");
       if(undated) toast(undated + " undated planned dishes from the old planner were not restored");
       var ids = Object.keys(photos);
@@ -5563,7 +5570,11 @@ function wipeAll(){
     var rep = repairAllIngredients();
     var seeded = seedPacks();
     var undated = clearUndatedPlan();
-    if(rep.fixed || seeded || undated){
+    /* Loop 13 (43): rows built before dates were recorded get rebuilt
+       once, silently, so the "×4 · Mon 9…" line appears without the
+       plan having to change first. */
+    var undatedRows = shopRowsUndated();
+    if(rep.fixed || seeded || undated || undatedRows){
       rebuildShopFromPlan(); save();
       if(undated) toast("Planner now runs by date — " + undated + " old undated dishes cleared, list rebuilt");
       else {
