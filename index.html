@@ -601,7 +601,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "39";
+var VERSION = "40";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -3665,7 +3665,10 @@ function weeklyDemand(){
   var need = {};
   shopRangeKeys().forEach(function(key){
     var cells = S.plan[key]; if(!cells) return;
-    var day = weekdayOf(key);
+    /* The date key itself, not its weekday name: a weekday name is
+       resolved against the week on screen, so the list would change
+       with whichever week the planner happened to be showing. */
+    var day = key;
     Object.keys(cells).forEach(function(slot){
       var c = cells[slot]; if(!c) return;
       var list = [];
@@ -3795,7 +3798,7 @@ function rebuildShopFromPlan(){
      simply is not bought for yet. */
   Object.keys(S.plan).forEach(function(key){
     var cells = S.plan[key];
-    var day = weekdayOf(key);
+    var day = key;                       // see weeklyDemand
     var counts = inShopRange(key);
     Object.keys(cells).forEach(function(slot){
       var cell = cells[slot];
