@@ -604,7 +604,7 @@ body.dark .qbox{color:var(--ink);}
    Family Meal Planner — rebuild
    Single file. Data in localStorage. API key entered by user.
    ═══════════════════════════════════════════════════════════ */
-var VERSION = "43";
+var VERSION = "44";
 var STORE_KEY = "fmp2";
 var MODEL = "claude-sonnet-4-6";
 
@@ -1471,7 +1471,11 @@ function addIngredients(list, mealTitle, day){
     /* Spoons and pinches are cupboard business, not a shopping decision. */
     if(isSeasoning(p)){ ensureCupboard(p.name); return; }
     var n = normalise(p.name);
-    var existing = S.shop.find(i => sameItem(normalise(i.name), n) && i.status !== "bought");
+    /* Loop 10 (44): a manual row is what you typed, nothing more. The
+       rebuild keeps manual rows and used to sum the plan into them on
+       every pass, with nothing ever subtracting ("Eggs 12 -> 174"). The
+       plan now gets a row of its own beside the manual one. */
+    var existing = S.shop.find(i => !i.manual && sameItem(normalise(i.name), n) && i.status !== "bought");
     if(existing){
       if(!existing.meals.includes(mealTitle)) existing.meals.push(mealTitle);
       /* Loop 13: the same dish on two dates still summed into one row,
@@ -3843,6 +3847,26 @@ function shopRowsUndated(){
     return !i.manual && !i.restock && i.status !== "bought" && i.uses === undefined;
   });
 }
+/* Loop 10 (44): manual rows that builds <= 43 summed the plan into.
+   Their quantity is the typed amount plus an unknown number of
+   rebuilds, so it cannot be recovered; the row goes back to a bare
+   name and the plan gets its own row. True once per device and once
+   per import of an older backup. */
+function shopManualTainted(){
+  return S.shop.some(function(i){
+    return i.manual && ((i.meals && i.meals.length) || (i.uses && i.uses.length));
+  });
+}
+function resetTaintedManualRows(){
+  var n = 0;
+  S.shop.forEach(function(i){
+    if(!i.manual) return;
+    if(!((i.meals && i.meals.length) || (i.uses && i.uses.length))) return;
+    i.meals = []; i.uses = []; i.qty = ""; i.unit = ""; i.extra = [];
+    n++;
+  });
+  return n;
+}
 function rebuildShopFromPlan(){
   var carried = {};
   S.shop.forEach(function(i){
@@ -5524,7 +5548,9 @@ function importData(ev){
       var photos = d._photos || {};
       delete S._photos;
       var undated = clearUndatedPlan();
-      if(undated || shopRowsUndated()) rebuildShopFromPlan();
+      var tainted = shopManualTainted();
+      if(tainted) resetTaintedManualRows();
+      if(undated || tainted || shopRowsUndated()) rebuildShopFromPlan();
       save(); applyTheme(); goTab("plan");
       if(undated) toast(undated + " undated planned dishes from the old planner were not restored");
       var ids = Object.keys(photos);
@@ -5574,7 +5600,8 @@ function wipeAll(){
        once, silently, so the "×4 · Mon 9…" line appears without the
        plan having to change first. */
     var undatedRows = shopRowsUndated();
-    if(rep.fixed || seeded || undated || undatedRows){
+    var tainted = shopManualTainted() ? resetTaintedManualRows() : 0;
+    if(rep.fixed || seeded || undated || undatedRows || tainted){
       rebuildShopFromPlan(); save();
       if(undated) toast("Planner now runs by date — " + undated + " old undated dishes cleared, list rebuilt");
       else {
